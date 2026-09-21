@@ -1,0 +1,21 @@
+[submodule "libs/Styx"]
+	path = libs/Styx
+	url = https://github.com/Vanaheimr/Styx.git
+[submodule "libs/Hermod"]
+	path = libs/Hermod
+	url = https://github.com/Vanaheimr/Hermod.git
+[submodule "libs/Norn"]
+	path = libs/Norn
+	url = https://github.com/Vanaheimr/Norn.git
+[submodule "libs/WWCP_Core"]
+	path = libs/WWCP_Core
+	url = https://github.com/OpenChargingCloud/WWCP_Core.git
+[submodule "libs/WWCP_OCPI"]
+	path = libs/WWCP_OCPI
+	url = https://github.com/OpenChargingCloud/WWCP_OCPI.git
+[submodule "libs/RoamingHub"]
+	path = libs/RoamingHub
+	url = https://github.com/OpenChargingCloud/RoamingHub.git
+[submodule "libs/Urdr"]
+	path = libs/Urdr
+	url = https://github.com/Vanaheimr/Urdr.git

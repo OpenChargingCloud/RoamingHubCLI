@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>cloud.charging.open.RoamingHub.CLI</RootNamespace>
+    <AssemblyName>RoamingHubCLI</AssemblyName>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\libs\RoamingHub\RoamingHub\RoamingHub.csproj" />
+    <ProjectReference Include="..\libs\Hermod\Hermod\Hermod.csproj" />
+    <ProjectReference Include="..\libs\Norn\Norn\Norn.csproj" />
+    <ProjectReference Include="..\libs\Styx\Styx\Styx.csproj" />
+    <ProjectReference Include="..\libs\WWCP_OCPI\WWCP_OCPI_Common\WWCP_OCPI_Common.csproj" />
+    <ProjectReference Include="..\libs\WWCP_OCPI\WWCP_OCPIv2.2.1\WWCP_OCPIv2.2.1.csproj" />
+    <ProjectReference Include="..\libs\WWCP_OCPI\WWCP_OCPIv2.3.0\WWCP_OCPIv2.3.0.csproj" />
+  </ItemGroup>
+
+  <!--
+    No WWCP_OCPIv2.1.1, and not by omission: the hub role arrived with OCPI 2.2
+    and the library has no hub side for the version before it. A CPO or an EMSP
+    that speaks only 2.1.1 cannot be peered with this hub at all.
+  -->
+
+</Project>

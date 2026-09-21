@@ -1,0 +1,31 @@
+<Solution>
+  <Folder Name="/Dependencies/">
+    <Project Path="libs/RoamingHub/RoamingHub/RoamingHub.csproj" />
+    <Project Path="libs/RoamingHub/RoamingHubTests/RoamingHubTests.csproj" />
+  </Folder>
+  <Folder Name="/Dependencies/OCPI/">
+    <!--
+      No 2.1.1: the hub role arrived with OCPI 2.2, and the library has no hub
+      side for the version before it - see libs/RoamingHub/RoamingHub/RoamingHub.csproj.
+    -->
+    <Project Path="libs/WWCP_OCPI/WWCP_OCPI_Common/WWCP_OCPI_Common.csproj" />
+    <Project Path="libs/WWCP_OCPI/WWCP_OCPIv2.2.1/WWCP_OCPIv2.2.1.csproj" />
+    <Project Path="libs/WWCP_OCPI/WWCP_OCPIv2.3.0/WWCP_OCPIv2.3.0.csproj" />
+  </Folder>
+  <Folder Name="/Dependencies/OpenChargingCloud/">
+    <Project Path="libs/WWCP_Core/WWCP_Core/WWCP_Core.csproj" />
+    <Project Path="libs/WWCP_Core/WWCP_CoreData/WWCP_CoreData.csproj" />
+    <Project Path="libs/WWCP_Core/WWCP_Core_Tests/WWCP_Core_Tests.csproj" />
+  </Folder>
+  <Folder Name="/Dependencies/Vanaheimr/">
+    <Project Path="libs/Hermod/Hermod/Hermod.csproj" />
+    <Project Path="libs/Hermod/HermodTests/HermodTests.csproj" />
+    <Project Path="libs/Norn/Norn/Norn.csproj" />
+    <Project Path="libs/Norn/NornTests/NornTests.csproj" />
+    <Project Path="libs/Styx/Styx/Styx.csproj" />
+    <Project Path="libs/Styx/StyxTests/StyxTests.csproj" />
+    <Project Path="libs/Urdr/Urdr/Urdr.csproj" />
+    <Project Path="libs/Urdr/UrdrTests/UrdrTests.csproj" />
+  </Folder>
+  <Project Path="RoamingHubCLI/RoamingHubCLI.csproj" />
+</Solution>
