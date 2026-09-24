@@ -1,5 +1,8 @@
 # RoamingHub - EV Roaming Hub
 
+[![CI](https://github.com/OpenChargingCloud/RoamingHubCLI/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenChargingCloud/RoamingHubCLI/actions/workflows/ci.yml)
+[![Nightly](https://github.com/OpenChargingCloud/RoamingHubCLI/actions/workflows/nightly.yml/badge.svg)](https://github.com/OpenChargingCloud/RoamingHubCLI/actions/workflows/nightly.yml)
+
 This software implements an OCPI roaming hub: the thing that sits between the
 charge point operators and the e-mobility service providers so that they do not
 each have to be peered with all the others. Every one of them is peered with the
