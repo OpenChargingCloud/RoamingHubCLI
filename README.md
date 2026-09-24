@@ -90,6 +90,35 @@ counterpart directly.
 `--any`, `--accounts <dir>`, `--frontend <dir>`, `--config <file>`,
 `--verbose`, `--quiet`, `--no-trace`.
 
+
+### Typing at it
+
+Once it is up, the console is a prompt rather than a place that only scrolls:
+
+```
+RoamingHub> syncNTS
+succeeded after 541 ms: ptbtime1.ptb.de says this hub's clock is +1011.5 ms off
+  key exchange  AES_SIV_CMAC_256, 8 cookie(s), 494 ms
+  time          round trip 26.5 ms, 8 cookie(s) left
+```
+
+`help` lists what can be typed, `quit` leaves, **Tab** completes and **↑**
+walks back through what was typed before. `syncNTS` is **Sync now** on the
+**NTS** page, typed: the same time server is asked, the same entries go into
+the log, and the same result is left behind for the page and the overview to
+show. The one entry that differs says who asked - the page names the account
+that pressed the button, the prompt says it was somebody at the command line.
+Neither of them steps the clock.
+
+The log keeps writing while you type, from whichever thread did the thing it is
+reporting, and your half-typed line survives it: the line is taken off the
+screen, the entry is written whole, and the line comes back with the cursor
+where it was.
+
+Where there is no terminal - from a script, under a service manager, in CI, or
+with the output going into a file or through `| tee` - there is no prompt, and
+the hub runs until it is stopped, exactly as it did before.
+
 While working on the web interface, run `npm run watch` in
 `libs/RoamingHub/RoamingHub/Frontend` and start the hub with `--frontend
 libs/RoamingHub/RoamingHub/Frontend/dist`: a reload in the browser then shows
@@ -128,13 +157,15 @@ traffic is what its peers did through it.
 | | |
 |---|---|
 | `RoamingHubCLI/` | the command line: switches, and what the console says at a start |
+| `RoamingHubCLI/CLI/` | the prompt, and one file per command that can be typed at it |
 | `libs/RoamingHub/RoamingHub/` | the hub itself - its configuration, its log, its JSON API, its OCPI bindings, its traffic log |
 | `libs/RoamingHub/RoamingHub/Frontend/` | the web interface: TypeScript and SCSS, bundled by webpack |
 | `libs/RoamingHub/RoamingHubTests/` | what a hub does when a peer, or a stranger, talks to it |
 | `libs/WWCP_OCPI/` | the protocol: OCPI 2.2.1 and 2.3.0 |
 
-The command line is this program's vocabulary and nothing else. What a roaming
-hub *is*, and what it does, lives in `libs/RoamingHub`.
+The command line is this program's vocabulary and nothing else - the switches
+at a start and the commands at the prompt. What a roaming hub *is*, and what
+it does, lives in `libs/RoamingHub`.
 
 
 ### Your participation
