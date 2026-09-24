@@ -97,18 +97,54 @@ Once it is up, the console is a prompt rather than a place that only scrolls:
 
 ```
 RoamingHub> syncNTS
-succeeded after 541 ms: ptbtime1.ptb.de says this hub's clock is +1011.5 ms off
-  key exchange  AES_SIV_CMAC_256, 8 cookie(s), 494 ms
-  time          round trip 26.5 ms, 8 cookie(s) left
+succeeded after 712 ms: 4 of 4 server(s) answered (2 required), offset +1043.3 ms, spread 2.9 ms
+  ptbtime1.ptb.de  +1043.3 ms, round trip 52.6 ms, key exchange new
+  ptbtime2.ptb.de  +1043.3 ms, round trip 52.7 ms, key exchange new
+  ptbtime3.ptb.de  +1043.4 ms, round trip 52.6 ms, key exchange new
+  ptbtime4.ptb.de  +1046.2 ms, round trip 52.5 ms, key exchange new
 ```
 
 `help` lists what can be typed, `quit` leaves, **Tab** completes and **↑**
 walks back through what was typed before. `syncNTS` is **Sync now** on the
-**NTS** page, typed: the same time server is asked, the same entries go into
-the log, and the same result is left behind for the page and the overview to
-show. The one entry that differs says who asked - the page names the account
-that pressed the button, the prompt says it was somebody at the command line.
-Neither of them steps the clock.
+**NTS** page, typed: the same group of time servers is asked, the same entries
+go into the log, and the same result is left behind for the page and the
+overview to show. The one entry that differs says who asked - the page names
+the account that pressed the button, the prompt says it was somebody at the
+command line. The console gets a line for each server as well, because the log
+only records what the group concluded. Neither of them steps the clock.
+
+With one of the hub's time servers after it, it is that server's **Test**
+button instead: one server, on the ports it is configured with, and every step
+of the key exchange and the time request with when it happened - the TLS
+certificate of the server and every certificate of the chain this machine
+built, with both ends of their validity, the root's SHA-256 fingerprint, and
+whether all of it held up. Only a server of this hub is tested; anything else
+is answered with the ones there are, and nothing is asked. Tab offers them as
+soon as the command is typed.
+
+```
+RoamingHub> syncNTS ptbtime2.ptb.de
+ptbtime2.ptb.de answered, 295 ms altogether:
+    +0 ms  Asking ptbtime2.ptb.de: key exchange on port 4460, time on port 123, 10 second(s) allowed.
+   +15 ms  'ptbtime2.ptb.de' resolves to 192.53.103.104, 2001:0638:0610:be01:0000:0000:0000:0104.
+   +15 ms  Key exchange over TLS ...
+  +257 ms  Connected to 2001:0638:0610:be01:0000:0000:0000:0104, of 2 address(es) that were offered.
+  +258 ms  Where the time went: name 0 ms, TCP 22 ms, TLS 135 ms, key exchange 84 ms.
+  +260 ms  TLS 1.3, TLS_AES_128_GCM_SHA256, ALPN ntske/1.
+  +263 ms  Server certificate: CN=ptbtime2.ptb.de, for ptbtime2.ptb.de; RSA 3072-bit, sha256RSA; valid 2026-08-09 03:05:52 to 2026-11-07 03:05:51 UTC, 43 day(s) left.
+  +263 ms  Intermediate CA: CN=YR1, O=Let's Encrypt, C=US; RSA 2048-bit, sha256RSA; valid 2025-09-03 00:00:00 to 2028-09-02 23:59:59 UTC, 709 day(s) left.
+  +263 ms  Intermediate CA: CN=Root YR, O=ISRG, C=US; RSA 4096-bit, sha256RSA; valid 2026-05-13 00:00:00 to 2032-09-02 23:59:59 UTC, 2170 day(s) left.
+  +263 ms  Root CA: CN=ISRG Root X1, O=Internet Security Research Group, C=US; RSA 4096-bit, sha256RSA; valid 2015-06-04 11:04:38 to 2035-06-04 11:04:38 UTC, 3174 day(s) left.
+  +263 ms  The root's SHA-256 fingerprint: 96bcec06264976f37460779acf28c5a7cfe8a3c0aae11a8ffcee05c0bddf08c6.
+  +263 ms  Validated: the chain ends at a root this machine trusts, nothing in it is revoked (asked online), and 'ptbtime2.ptb.de' is one of the server certificate's names.
+  +264 ms  The key exchange succeeded: AES_SIV_CMAC_256, 8 cookie(s).
+  +264 ms  It named no NTP server of its own, so the time is asked of this host.
+  +264 ms  Authenticated NTP request ...
+  +294 ms  Answered by [2001:638:610:be01::104]:123; 8 cookie(s) left, and a fresh one came back.
+  +294 ms  Round trip 29.4 ms.
+  +294 ms  This RoamingHub's clock is +1045.5 ms off what ptbtime2.ptb.de says.
+  +294 ms  The clock was not stepped: that is a different thing, with the sessions and charge detail records of every peer stamped against it, and not something a test does by surprise.
+```
 
 The log keeps writing while you type, from whichever thread did the thing it is
 reporting, and your half-typed line survives it: the line is taken off the

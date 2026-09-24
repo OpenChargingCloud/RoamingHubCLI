@@ -30,35 +30,36 @@ namespace cloud.charging.open.RoamingHub.CommandLine
 {
 
     /// <summary>
-    /// Ask this roaming hub's time server what the time is.
+    /// Ask this roaming hub's time servers what the time is, or one of them
+    /// everything.
     /// </summary>
     /// <remarks>
-    /// The same thing the NTS page does with 'Sync now'. Both end in
-    /// <see cref="RoamingHub.SyncTimeAsync"/>, which asks the same server,
-    /// writes every step into the log and keeps the result as the last
-    /// synchronisation the page shows - so the log book reads the same
-    /// whichever of the two was used, apart from the one line that says who
-    /// asked. A command that did any of that itself would be the beginning of
-    /// two hubs disagreeing about what they did.
+    /// Without a server, the same thing the NTS page does with 'Sync now'. Both
+    /// end in <see cref="RoamingHub.SyncTimeAsync"/>, which writes every step into the
+    /// log and keeps the result as the last synchronisation the page shows -
+    /// so the log book reads the same whichever of the two was used, apart
+    /// from the one line that says who asked.
     ///
-    /// Like the button, it does not step the clock: it says whether the time
-    /// server can be reached and what it thinks of the local clock.
+    /// With one, the same thing as that server's Test button on the page:
+    /// <see cref="RoamingHub.TestTimeServerAsync"/>, on the ports the server is
+    /// configured with, step by step. Only a server of this hub is
+    /// tested. Anything else is answered with the servers there are, and
+    /// nothing is asked - a name that was mistyped would otherwise be a key
+    /// exchange with whoever answers to it.
     ///
-    /// Without an argument, and only without: the vehicle's and the charging
-    /// station's take a server's name to test that one in detail, and this hub
-    /// has one server and no such test to offer.
+    /// Neither steps the clock: they say whether the time servers can be
+    /// reached and what they think of the local clock.
     /// </remarks>
     /// <param name="CLI">The command line of the roaming hub to ask.</param>
     public class SyncNTSCommand(HubCLI CLI) : ACLICommand<HubCLI>(CLI),
-                                              ICLICommand
+                                                  ICLICommand
     {
 
         #region Data
 
         /// <summary>
         /// The name this is typed as. Taken from the class name, as everywhere
-        /// else: "SyncNTSCommand" without its last seven characters. Found in
-        /// any case - "syncnts" is the same command.
+        /// else: "SyncNTSCommand" without its last seven characters.
         /// </summary>
         public static readonly String CommandName = nameof(SyncNTSCommand)[..^7].ToLowerFirstChar();
 
@@ -67,17 +68,74 @@ namespace cloud.charging.open.RoamingHub.CommandLine
         #region Suggest(Arguments)
 
         /// <summary>
-        /// Complete the command. It takes nothing after it: which server is
-        /// asked is the hub's configuration, as it is for the button.
+        /// Complete the command, and then its one argument from the time
+        /// servers this hub has.
         /// </summary>
+        /// <remarks>
+        /// The servers are offered as soon as the command is whole, and not
+        /// only once something of a server has been typed. The command line
+        /// is split on whitespace and keeps no empty word at its end, so
+        /// "syncNTS " arrives here as "syncNTS" alone - and a Tab there that
+        /// answered with the command it already was would never show the list
+        /// it is there to show.
+        /// </remarks>
         public override IEnumerable<SuggestionResponse> Suggest(String[] Arguments)
         {
 
-            if (Arguments.Length == 1 &&
-                CommandName.StartsWith(Arguments[0], StringComparison.CurrentCultureIgnoreCase))
+            #region The command itself - and, once it is whole, the servers
+
+            if (Arguments.Length == 1)
             {
-                return [ SuggestionResponse.CommandCompleted(CommandName) ];
+
+                if (CommandName.Equals(Arguments[0], StringComparison.CurrentCultureIgnoreCase))
+                {
+
+                    var all = TimeServers().
+                                  Select(server => SuggestionResponse.ParameterPrefix($"{CommandName} {server}")).
+                                  ToArray();
+
+                    return all.Length > 0
+                               ? all
+                               : [ SuggestionResponse.CommandCompleted(CommandName) ];
+
+                }
+
+                if (CommandName.StartsWith(Arguments[0], StringComparison.CurrentCultureIgnoreCase))
+                    return [ SuggestionResponse.CommandCompleted(CommandName) ];
+
+                return [];
+
             }
+
+            #endregion
+
+            #region ... and the server to test
+
+            if (Arguments.Length == 2 &&
+                CommandName.Equals(Arguments[0], StringComparison.CurrentCultureIgnoreCase))
+            {
+
+                var list = new List<SuggestionResponse>();
+
+                foreach (var server in TimeServers())
+                {
+
+                    if (!server.StartsWith(Arguments[1], StringComparison.CurrentCultureIgnoreCase))
+                        continue;
+
+                    list.Add(
+                        server.Equals(Arguments[1], StringComparison.CurrentCultureIgnoreCase)
+                            ? SuggestionResponse.ParameterCompleted($"{CommandName} {server}")
+                            : SuggestionResponse.ParameterPrefix   ($"{CommandName} {server}")
+                    );
+
+                }
+
+                return list;
+
+            }
+
+            #endregion
 
             return [];
 
@@ -91,16 +149,46 @@ namespace cloud.charging.open.RoamingHub.CommandLine
                                                      CancellationToken  CancellationToken)
         {
 
-            if (Arguments.Length > 1)
+            if (Arguments.Length > 2)
                 return [ $"Usage: {Help()}" ];
 
-            // The line the web interface writes when 'Sync now' is pressed, in
-            // the same words, at the same level and with the tags it carries
-            // there - "cli" where it says "web". There it names the account
-            // that pressed the button; here it is whoever is at the console,
-            // which the hub cannot tell apart. Said before anything is asked,
-            // because the entries that follow record what was asked and what
-            // came of it, and nothing in them says who wanted it.
+            #region One server, in detail
+
+            if (Arguments.Length == 2)
+            {
+
+                var wanted  = Arguments[1].Trim().TrimEnd('.');
+                var server  = cli.Hub.TimeSources.Sources.FirstOrDefault(source => String.Equals(source.Hostname.Trimmed,
+                                                                                                     wanted,
+                                                                                                     StringComparison.OrdinalIgnoreCase));
+
+                // Said and nothing more. Not written to the log either: nothing
+                // was asked of anybody, which is what the log is a book of.
+                if (server is null)
+                    return [ $"'{Arguments[1]}' is none of this hub's time servers, which are {String.Join(", ", TimeServers())}." ];
+
+                // The name as the page sends it for the Test button of that
+                // row - as it is read, without the root's dot - so that the
+                // line the log gets is the page's line, with the command line
+                // where the page names the account and "cli" where it says
+                // "web".
+                var host = server.Hostname.Trimmed;
+
+                cli.Hub.Log.Info(
+                    $"Somebody at the command line asked this RoamingHub to test the time server '{host}'.",
+                    "nts", "test", "cli"
+                );
+
+                return Tested(await cli.Hub.TestTimeServerAsync(host, CancellationToken));
+
+            }
+
+            #endregion
+
+            // The line the web interface writes when 'Sync now' is pressed, with
+            // the tags it carries there and "cli" where it says "web". There it
+            // names the account that pressed the button; here it is whoever is
+            // at the console, which the hub cannot tell apart.
             cli.Hub.Log.Info(
                 "Somebody at the command line asked this RoamingHub to synchronise its time.",
                 "nts", "test", "cli"
@@ -118,7 +206,26 @@ namespace cloud.charging.open.RoamingHub.CommandLine
 
         public override String Help()
 
-            => $"{CommandName} - ask the time server what the time is, as 'Sync now' on the NTS page does; the clock is not stepped";
+            => $"{CommandName} [<time server>] - ask the time servers what the time is, as 'Sync now' on the NTS page does, " +
+                "or test one of them in detail, as its Test button does; the clock is not stepped";
+
+        #endregion
+
+
+        #region (private) TimeServers()
+
+        /// <summary>
+        /// The time servers of this hub, switched on or not, as somebody
+        /// types them: without the root's dot.
+        /// </summary>
+        /// <remarks>
+        /// Switched-off ones as well, because the page tests those too: finding
+        /// out whether a server answers is what somebody does before switching
+        /// it on.
+        /// </remarks>
+        private IEnumerable<String> TimeServers()
+
+            => cli.Hub.TimeSources.Sources.Select(source => source.Hostname.Trimmed);
 
         #endregion
 
@@ -127,47 +234,136 @@ namespace cloud.charging.open.RoamingHub.CommandLine
 
         /// <summary>
         /// What the NTS page shows after 'Sync now', as lines for the console:
-        /// how it went, and what the server said.
+        /// how it went, and what each server said.
         /// </summary>
         /// <remarks>
-        /// The key exchange and the NTP answer get a line of their own
-        /// because the log has them only as the steps they were taken in, and
-        /// somebody at the console wants the verdict first.
+        /// The servers get a line each because the log does not have them: it
+        /// records that the group was asked and what the group concluded, and
+        /// which server was the one that did not answer is only in here and on
+        /// the page.
+        ///
+        /// Numbers are written invariantly. These sentences are English, and a
+        /// hub in a German locale otherwise writes "+1,2 ms" in the middle
+        /// of one.
         /// </remarks>
         private static String[] Outcome(JObject Result)
         {
 
-            var lines   = new List<String>();
+            var lines    = new List<String>();
+            var servers  = Result["servers"] as JArray ?? [];
+            var took     = Result.Value<Int64?>("runtime_ms") is Int64 runtime
+                               ? $" after {runtime} ms"
+                               : "";
 
-            // Without the root's dot, as the banner writes it:
-            // "ptbtime1.ptb.de." is correct and nobody reads it that way.
-            var server  = (Result.Value<String>("server") ?? "the time server").TrimEnd('.');
-            var took    = Result.Value<Int64?>("runtime_ms") is Int64 runtime
-                              ? $" after {runtime} ms"
-                              : "";
-
-            if (!Result.Value<Boolean>("ok"))
+            if (Result.Value<Boolean>("ok"))
             {
+
+                var group = Result["group"] as JObject;
+
+                lines.Add($"succeeded{took}: {group?.Value<Int32?>("answered")} of {servers.Count} server(s) answered " +
+                          $"({group?.Value<Int32?>("required")} required), " +
+                          $"offset {Milliseconds(group?.Value<Double?>("offset_ms"), Signed: true)}, " +
+                          $"spread {Milliseconds(group?.Value<Double?>("spread_ms"))}");
+
+                if (group?.Value<Boolean?>("deviationExceeded") == true)
+                    lines.Add("  The servers disagree by more than the agreed deviation - see the log.");
+
+            }
+            else
                 lines.Add($"failed{took}: {Result.Value<String>("error") ?? "no reason was given"}");
-                return [.. lines];
+
+            if (servers.Count > 0)
+            {
+
+                // Without the root's dot, as the group's own line writes them:
+                // "ptbtime1.ptb.de." is correct and nobody reads it that way.
+                static String Hostname(JToken Server)
+                    => (Server.Value<String>("hostname") ?? "").TrimEnd('.');
+
+                var width = servers.Max(server => Hostname(server).Length);
+
+                foreach (var server in servers.OfType<JObject>())
+                    lines.Add($"  {Hostname(server).PadRight(width)}  {ServerSaid(server)}");
+
             }
 
-            lines.Add($"succeeded{took}: {server} says this hub's clock is " +
-                      $"{Milliseconds(Result.Value<Double?>("offset_ms"), Signed: true)} off");
+            return [.. lines];
 
-            if (Result["ntske"] is JObject keyExchange)
-                lines.Add($"  key exchange  {keyExchange.Value<String>("aeadAlgorithm") ?? "unknown"}, " +
-                          $"{keyExchange.Value<Int32?>("cookies")} cookie(s), " +
-                          $"{keyExchange.Value<Int64?>("runtime_ms")} ms");
+        }
 
-            if (Result["ntp"] is JObject ntp)
-                lines.Add($"  time          round trip {Milliseconds(ntp.Value<Double?>("roundTrip_ms"))}, " +
-                          $"{ntp.Value<Int32?>("cookiesLeft")} cookie(s) left" +
-                          (ntp.Value<String>("kissOfDeath") is String kissOfDeath && kissOfDeath.Length > 0
-                               ? $", kiss of death {kissOfDeath}"
-                               : ""));
+        #endregion
+
+        #region (private static) Tested(Result)
+
+        /// <summary>
+        /// What the Test button's dialog shows, as lines for the console: whether
+        /// the server answered, and then every step with when it happened.
+        /// </summary>
+        /// <remarks>
+        /// All of the steps and not a summary, because they are the answer: a
+        /// test is asked for when something did not work, and which step it
+        /// got to is the whole of what somebody needs. The log has only the
+        /// beginning and the end of it, as it has for the button.
+        ///
+        /// Warnings and errors say so, where the page says it in colour.
+        /// </remarks>
+        private static String[] Tested(JObject Result)
+        {
+
+            var host   = (Result.Value<String>("host") ?? "").TrimEnd('.');
+            var steps  = (Result["steps"] as JArray ?? []).OfType<JObject>().ToArray();
+            var at     = steps.Select(step => $"+{step.Value<Int64>("at_ms")} ms").ToArray();
+            var width  = at.Length > 0 ? at.Max(when => when.Length) : 0;
+
+            var lines  = new List<String> {
+                             $"{host} {(Result.Value<Boolean>("ok") ? "answered" : "did not answer")}, " +
+                             $"{Result.Value<Int64>("runtime_ms")} ms altogether:"
+                         };
+
+            for (var i = 0; i < steps.Length; i++)
+            {
+
+                var level = steps[i].Value<String>("level");
+
+                lines.Add($"  {at[i].PadLeft(width)}  " +
+                          (level is "warning" or "error" ? $"{level}: " : "") +
+                          steps[i].Value<String>("text"));
+
+            }
 
             return [.. lines];
+
+        }
+
+        #endregion
+
+        #region (private static) ServerSaid(Server)
+
+        /// <summary>
+        /// What one server said: its offset and round trip when its answer
+        /// counted, and otherwise why it did not.
+        /// </summary>
+        /// <remarks>
+        /// An answer that did not authenticate is said to be one. The page
+        /// writes "no answer" for it, and on a console that is the difference
+        /// between a server that is down and one that is not the server it
+        /// claims to be.
+        /// </remarks>
+        private static String ServerSaid(JObject Server)
+        {
+
+            if (Server.Value<Boolean>("ok"))
+                return $"{Milliseconds(Server.Value<Double?>("offset_ms"), Signed: true)}, " +
+                       $"round trip {Milliseconds(Server.Value<Double?>("roundTrip_ms"))}, " +
+                       $"key exchange {Server.Value<String>("keyExchange") ?? "unknown"}";
+
+            if (Server.Value<String>("error") is String error && error.Length > 0)
+                return error;
+
+            if (Server.Value<Boolean?>("authenticated") == false)
+                return "answered, but the answer did not authenticate";
+
+            return "no answer";
 
         }
 
@@ -177,9 +373,7 @@ namespace cloud.charging.open.RoamingHub.CommandLine
 
         /// <summary>
         /// The one place a number with a fraction is written, and so the one
-        /// place the culture has to be kept out: these sentences are English,
-        /// and a hub in a German locale would otherwise write "+1,2 ms" in the
-        /// middle of one.
+        /// place the culture has to be kept out.
         /// </summary>
         private static String Milliseconds(Double? Value, Boolean Signed = false)
 

@@ -121,7 +121,7 @@ namespace cloud.charging.open.RoamingHub.CLI
             Console.WriteLine($"                      start for the user '{Hub.DefaultAdminUser}' and shown once.");
             Console.WriteLine();
             Console.WriteLine("Configuration:");
-            Console.WriteLine("  --config <file>   where the name servers, the time server and the OCPI identity of");
+            Console.WriteLine("  --config <file>   where the name servers, the time servers and the OCPI identity of");
             Console.WriteLine($"                    this hub live (default: {RoamingHubConfigFile.DefaultFileName} below the repository");
             Console.WriteLine("                    root). Without the file the hub runs on the system defaults and is");
             Console.WriteLine($"                    {OCPIConfiguration.DefaultCountryCode}-{OCPIConfiguration.DefaultPartyId} in OCPI; the name and time servers written there take");
@@ -353,10 +353,37 @@ namespace cloud.charging.open.RoamingHub.CLI
                 Console.WriteLine($"  peers           {hub.RemotePartyCount} peered, {hub.RegisteredPartyCount} of them registered, in {hub.OCPIDirectory}");
                 Console.WriteLine($"  calls kept      the last {hub.Traffic.Capacity}, in memory only, {(hub.OCPI.Logging?.Payloads == true ? "bodies and all" : "without the bodies")}");
                 Console.WriteLine($"  name servers    {(hub.DNSEnabled ? String.Join(", ", hub.DNSClient.DNSServers) : "switched off")}");
-                // Without the root's dot: "ptbtime1.ptb.de." is the name exactly,
-                // and in the middle of a line somebody reads it reads like a
-                // typing mistake. The file keeps it.
-                Console.WriteLine($"  time server     {hub.NTSClient.Hostname.Trimmed}{(hub.NTSEnabled ? "" : " (switched off)")}");
+                #region The time servers
+
+                var bands = hub.TimeSources.Bands();
+                var asked = bands.SelectMany(band => band).ToArray();
+
+                // The group's one server where it has one, and without the
+                // root's dot as the servers of a longer list are below:
+                // "ptbtime1.ptb.de." is the name exactly, and in the middle of a
+                // line somebody reads it reads like a typing mistake. The file
+                // keeps it.
+                if (asked.Length <= 1)
+                    Console.WriteLine($"  time server     {(asked.Length == 1 ? asked[0].Hostname : hub.NTSClient.Hostname).Trimmed}{(hub.NTSEnabled ? "" : " (switched off)")}");
+
+                else
+                {
+
+                    // One line per band, because a band is the unit that is
+                    // asked at once - putting two bands on one line would read
+                    // as six equal servers when it is two and then four. The
+                    // names as they are read, as the log names them.
+                    for (var i = 0; i < bands.Count; i++)
+                        Console.WriteLine((i == 0 ? "  time servers    " : "                  ") +
+                                          String.Join(", ", bands[i].Select(source => source.Hostname.Trimmed)) +
+                                          (bands.Count > 1 ? $"   (priority {bands[i][0].Priority})" : ""));
+
+                    Console.WriteLine($"                  at least {hub.TimeSources.MinServers} of them must answer" +
+                                      (hub.NTSEnabled ? "" : " - and NTS is switched off"));
+
+                }
+
+                #endregion
 
                 if (hub.GeneratedPassword is not null)
                 {
