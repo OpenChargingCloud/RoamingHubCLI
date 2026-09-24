@@ -345,6 +345,28 @@ namespace cloud.charging.open.RoamingHub.CLI
                 Console.WriteLine($"  traffic stream  {hub.APIURL}v1/traffic/events");
                 Console.WriteLine($"  HTTPExt API     {hub.WebInterfaceURL}{extPath}/");
                 Console.WriteLine($"  frontend from   {(hub.WebInterface is not null ? hub.Frontend.Description : "nothing - a browser asking for '/' gets nothing to render")}");
+
+                var builtFrom = BuiltFrom.Repositories.ToArray();
+
+                if (builtFrom.Length > 0)
+                {
+
+                    // One line each, and the whole hash. This is meant to be read
+                    // out of a bug report and pasted into a checkout, and an
+                    // abbreviation is a thing somebody then has to guess the rest
+                    // of. The column is as wide as the longest name rather than a
+                    // number picked today, so a repository joining later still
+                    // lines up.
+                    var width = builtFrom.Max(repository => repository.Repository!.Length);
+
+                    for (var i = 0; i < builtFrom.Length; i++)
+                        Console.WriteLine((i == 0 ? "  built from      " : "                  ") +
+                                          builtFrom[i].Repository!.PadRight(width) +
+                                          "  " +
+                                          builtFrom[i].Commit);
+
+                }
+
                 Console.WriteLine($"  configuration   {hub.ConfigFile.Path}");
                 Console.WriteLine($"  accounts        {hub.ExtAPI.Users.Count()} user(s) in {hub.AccountsPath}");
                 Console.WriteLine($"  sign in at      {hub.WebInterfaceURL}{extPath}/login");
