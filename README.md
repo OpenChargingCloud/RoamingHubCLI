@@ -42,12 +42,13 @@ account, no key.
 git config --global core.longpaths true
 ```
 
-The deepest file in the submodules is well over 140 characters below the clone
-root, so under the classic 260-character limit the root has little room to live
-in. `D:\src\RoamingHub` is fine; a checkout somewhere below
-`C:\Users\<you>\AppData\Local\Temp\...` is not, and the clone fails halfway
-through a submodule with `Filename too long` rather than at the start.
-Per clone instead of globally: `git clone -c core.longpaths=true ...`.
+The deepest file in the submodules is 128 characters below the clone root, and
+under the classic 260-character limit git creates no file whose whole path is
+longer than 259, so the root itself may be at most 130 characters long.
+`D:\src\RoamingHub` is fine; a checkout nested deep below
+`C:\Users\<you>\AppData\Local\Temp\...` can run out of room, and then the clone
+fails halfway through a submodule with `Filename too long` rather than at the
+start. Per clone instead of globally: `git clone -c core.longpaths=true ...`.
 
 
 ### Building and running it
