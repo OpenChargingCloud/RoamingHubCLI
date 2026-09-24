@@ -353,7 +353,10 @@ namespace cloud.charging.open.RoamingHub.CLI
                 Console.WriteLine($"  peers           {hub.RemotePartyCount} peered, {hub.RegisteredPartyCount} of them registered, in {hub.OCPIDirectory}");
                 Console.WriteLine($"  calls kept      the last {hub.Traffic.Capacity}, in memory only, {(hub.OCPI.Logging?.Payloads == true ? "bodies and all" : "without the bodies")}");
                 Console.WriteLine($"  name servers    {(hub.DNSEnabled ? String.Join(", ", hub.DNSClient.DNSServers) : "switched off")}");
-                Console.WriteLine($"  time server     {hub.NTSClient.Hostname}{(hub.NTSEnabled ? "" : " (switched off)")}");
+                // Without the root's dot: "ptbtime1.ptb.de." is the name exactly,
+                // and in the middle of a line somebody reads it reads like a
+                // typing mistake. The file keeps it.
+                Console.WriteLine($"  time server     {hub.NTSClient.Hostname.Trimmed}{(hub.NTSEnabled ? "" : " (switched off)")}");
 
                 if (hub.GeneratedPassword is not null)
                 {
