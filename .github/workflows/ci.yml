@@ -147,11 +147,11 @@ jobs:
       # Windows leg answers the smaller question below.
       #
       # Everything it writes goes to a temporary directory: a first start makes
-      # an account store, a configuration file, a directory for the OCPI files
-      # of its peers and the node's certificate store, all of them beside the
-      # solution unless it is told otherwise, and a checkout is no place for an
-      # account store. Nothing on its standard input, so there is no prompt to
-      # type at: without a terminal it only serves, as it does as a service.
+      # an account store, a configuration file and a directory for the OCPI
+      # files of its peers, all of them beside the solution unless it is told
+      # otherwise, and a checkout is no place for an account store. Nothing on
+      # its standard input, so there is no prompt to type at: without a
+      # terminal it only serves, as it does as a service.
       #
       # Four questions are asked of it. "/" must come back as the embedded web
       # interface. "/api/v1/status" must come back 401, because the JSON API of
