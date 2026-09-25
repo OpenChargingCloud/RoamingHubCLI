@@ -266,7 +266,17 @@ __pycache__/
 # quietly swallow a source folder of the same name.
 /accounts/
 
-# What a running hub is configured as: its name servers, its time server and
+# The certificate store of the node below the hub, for the same reason and
+# with more to lose: whatever is imported here arrives with its private key.
+# Anchored like the accounts.
+#
+# Written at every start, beside the configuration file. The build stamp calls
+# a tree dirty when git reports anything at all, so a directory written at
+# every start would mark every build dirty and turn the marker into noise - and
+# a marker nobody believes is worse than none.
+/certificates/
+
+# What a running hub is configured as: its name servers, its time servers and
 # who it is in OCPI. A property of this particular installation, not of the
 # source.
 configuration.json

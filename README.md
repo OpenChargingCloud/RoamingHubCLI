@@ -83,7 +83,11 @@ not changeable while running: it is what every peer wrote into its credentials,
 and changing it under a live registration would not rename the hub, it would
 make it a second one nobody is peered with. The peers themselves are not in the
 file: the OCPI library keeps them in append-only files of its own below `ocpi/`
-beside it, one set per version, and reads them back at every start.
+beside it, one set per version, and reads them back at every start. Beside it
+as well, `certificates/`: the certificate store of
+[WWCP_Node](https://github.com/OpenChargingCloud/WWCP_Node), the node the hub
+is built on, which makes it at every start and which nothing of the hub
+chooses from yet.
 
 **No OCPI 2.1.1, and there cannot be.** The hub role arrived with OCPI 2.2 and
 the library has no hub side for the version before it. A CPO or an EMSP that
@@ -198,9 +202,10 @@ traffic is what its peers did through it.
 |---|---|
 | `RoamingHubCLI/` | the command line: switches, and what the console says at a start |
 | `RoamingHubCLI/CLI/` | the prompt, and one file per command that can be typed at it |
-| `libs/RoamingHub/RoamingHub/` | the hub itself - its configuration, its log, its JSON API, its OCPI bindings, its traffic log |
+| `libs/RoamingHub/RoamingHub/` | the hub itself - its section of the configuration, its JSON API, its OCPI bindings, its traffic log |
 | `libs/RoamingHub/RoamingHub/Frontend/` | the web interface: TypeScript and SCSS, bundled by webpack |
 | `libs/RoamingHub/RoamingHubTests/` | what a hub does when a peer, or a stranger, talks to it |
+| `libs/WWCP_Node/` | what the hub is before it is a hub: the log, the configuration file, name resolution and the time, the certificate store, the accounts and the web server |
 | `libs/WWCP_OCPI/` | the protocol: OCPI 2.2.1 and 2.3.0 |
 
 The command line is this program's vocabulary and nothing else - the switches

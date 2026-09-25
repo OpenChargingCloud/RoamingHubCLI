@@ -22,7 +22,9 @@ using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
 using cloud.charging.open.RoamingHub.CommandLine;
 using cloud.charging.open.RoamingHub.Configuration;
-using cloud.charging.open.RoamingHub.Logging;
+using cloud.charging.open.protocols.WWCP.Node;
+using cloud.charging.open.protocols.WWCP.Node.Configuration;
+using cloud.charging.open.protocols.WWCP.Node.Logging;
 
 // Inside this namespace "RoamingHub" is the namespace and not the class, so
 // the class needs a name of its own here.
@@ -122,7 +124,7 @@ namespace cloud.charging.open.RoamingHub.CLI
             Console.WriteLine();
             Console.WriteLine("Configuration:");
             Console.WriteLine("  --config <file>   where the name servers, the time servers and the OCPI identity of");
-            Console.WriteLine($"                    this hub live (default: {RoamingHubConfigFile.DefaultFileName} below the repository");
+            Console.WriteLine($"                    this hub live (default: {WWCPConfigFile.DefaultFileName} below the repository");
             Console.WriteLine("                    root). Without the file the hub runs on the system defaults and is");
             Console.WriteLine($"                    {OCPIConfiguration.DefaultCountryCode}-{OCPIConfiguration.DefaultPartyId} in OCPI; the name and time servers written there take");
             Console.WriteLine("                    effect at once. Who this hub is in OCPI is read once, at the start,");
@@ -298,8 +300,8 @@ namespace cloud.charging.open.RoamingHub.CLI
 
                           AccountsPath:     accountsPath ?? Path.Combine(RepositoryRoot(), Hub.DefaultAccountsPath),
 
-                          ConfigFile:       new RoamingHubConfigFile(
-                                                configFilePath ?? Path.Combine(RepositoryRoot(), RoamingHubConfigFile.DefaultFileName)
+                          ConfigFile:       new WWCPConfigFile(
+                                                configFilePath ?? Path.Combine(RepositoryRoot(), WWCPConfigFile.DefaultFileName)
                                             ),
 
                           Frontend:         frontend,
@@ -329,7 +331,28 @@ namespace cloud.charging.open.RoamingHub.CLI
             await using (hub)
             {
 
-                await hub.Start();
+                try
+                {
+                    await hub.Start();
+                }
+                catch (PortUnavailableException problem)
+                {
+
+                    // What somebody starting a second copy of this hub used to
+                    // get was a stack trace under the operating system's own
+                    // words for a port in use - in German on a German Windows,
+                    // with the port named nowhere. The node below says which
+                    // port, and what it was for.
+                    Console.Error.WriteLine($"The hub could not start: {problem.Message}.");
+                    Console.Error.WriteLine("Another copy of this hub already running is the usual answer. Stop it, " +
+                                            "or give this one another port with --port <number>.");
+
+                    if (verbose)
+                        Console.Error.WriteLine(problem);
+
+                    return 1;
+
+                }
 
                 #region What somebody who just started this needs to know
 

@@ -113,6 +113,15 @@ jobs:
           npm run typecheck:test
           npm test
 
+      # The node below the hub: the configuration file, the log, the time
+      # servers, the accounts' roles and the ports, which every one of these
+      # programs has alike. libs/WWCP_Node has a gate of its own, but that one
+      # builds it against whatever its libraries are on the day; this runs its
+      # tests against the versions pinned here, before the hub's.
+      - name: Test the node
+        timeout-minutes: 10
+        run: dotnet test libs/WWCP_Node/WWCP_Node_Tests/WWCP_Node_Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --logger "trx;LogFileName=node-${{ matrix.leg }}.trx" --results-directory artifacts
+
       # The hub's own tests. Nowhere else runs them — libs/RoamingHub has no
       # workflow of its own, by design: it is not built alone, it is built
       # here.
@@ -138,11 +147,11 @@ jobs:
       # Windows leg answers the smaller question below.
       #
       # Everything it writes goes to a temporary directory: a first start makes
-      # an account store, a configuration file and a directory for the OCPI
-      # files of its peers, all of them beside the solution unless it is told
-      # otherwise, and a checkout is no place for an account store. Nothing on
-      # its standard input, so there is no prompt to type at: without a
-      # terminal it only serves, as it does as a service.
+      # an account store, a configuration file, a directory for the OCPI files
+      # of its peers and the node's certificate store, all of them beside the
+      # solution unless it is told otherwise, and a checkout is no place for an
+      # account store. Nothing on its standard input, so there is no prompt to
+      # type at: without a terminal it only serves, as it does as a service.
       #
       # Four questions are asked of it. "/" must come back as the embedded web
       # interface. "/api/v1/status" must come back 401, because the JSON API of
