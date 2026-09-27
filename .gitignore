@@ -271,6 +271,20 @@ __pycache__/
 # source.
 configuration.json
 
+# What each server this hub connects to was last believed with: the
+# fingerprints of its certificate and its root, written beside the
+# configuration so that a change of certificate is noticed across a restart.
+# A record of what this machine saw, like the log, and not of the source.
+known-servers.json
+
+# The hub's certificate store, beside the configuration file: the roots its
+# time servers and name servers are believed through, the certificates they
+# are recognised by - and whatever is imported with a private key. This
+# installation's, never the source's; and made at every start, so left
+# untracked it would have the build stamp call every tree dirty. Anchored like
+# the accounts.
+/certificates/
+
 # The peers this hub is peered with and the tokens exchanged with them: the
 # OCPI library's own files, kept beside the configuration, one set per OCPI
 # version. Records of this particular installation, not of the source.

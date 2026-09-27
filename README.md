@@ -92,7 +92,15 @@ counterpart directly.
 
 `dotnet run --project RoamingHubCLI -- --help` lists the rest: `--port`,
 `--any`, `--accounts <dir>`, `--frontend <dir>`, `--config <file>`,
-`--verbose`, `--quiet`, `--no-trace`.
+`--certificates <dir>`, `--import-certificate <kind>=<file>`,
+`--certificate-password <pw>`, `--list-certificates`, `--verbose`, `--quiet`,
+`--no-trace`.
+
+Beside the solution, then, a first start leaves `accounts/`, `ocpi/` and the
+certificate store `certificates/`; `configuration.json` follows when a page
+first saves something, and `known-servers.json` when a server is first
+believed. All of them are this installation's and none of them the source's,
+so git ignores them.
 
 
 ### Typing at it
@@ -121,10 +129,11 @@ With one of the hub's time servers after it, it is that server's **Test**
 button instead: one server, on the ports it is configured with, and every step
 of the key exchange and the time request with when it happened - the TLS
 certificate of the server and every certificate of the chain this machine
-built, with both ends of their validity, the root's SHA-256 fingerprint, and
-whether all of it held up. Only a server of this hub is tested; anything else
-is answered with the ones there are, and nothing is asked. Tab offers them as
-soon as the command is typed.
+built, with both ends of their validity, the SHA-256 fingerprints of the
+server's certificate and of the root, which are what a pin is compared with,
+and whether all of it held up. Only a server of this hub is tested; anything
+else is answered with the ones there are, and nothing is asked. Tab offers
+them as soon as the command is typed.
 
 ```
 RoamingHub> syncNTS ptbtime2.ptb.de
@@ -136,6 +145,7 @@ ptbtime2.ptb.de answered, 295 ms altogether:
   +258 ms  Where the time went: name 0 ms, TCP 22 ms, TLS 135 ms, key exchange 84 ms.
   +260 ms  TLS 1.3, TLS_AES_128_GCM_SHA256, ALPN ntske/1.
   +263 ms  Server certificate: CN=ptbtime2.ptb.de, for ptbtime2.ptb.de; RSA 3072-bit, sha256RSA; valid 2026-08-09 03:05:52 to 2026-11-07 03:05:51 UTC, 43 day(s) left.
+  +263 ms  Its SHA-256 fingerprint: e2a0ad9e30fddb7d5b35b692159723a1aa96dd3062142456b3795b8638636472.
   +263 ms  Intermediate CA: CN=YR1, O=Let's Encrypt, C=US; RSA 2048-bit, sha256RSA; valid 2025-09-03 00:00:00 to 2028-09-02 23:59:59 UTC, 709 day(s) left.
   +263 ms  Intermediate CA: CN=Root YR, O=ISRG, C=US; RSA 4096-bit, sha256RSA; valid 2026-05-13 00:00:00 to 2032-09-02 23:59:59 UTC, 2170 day(s) left.
   +263 ms  Root CA: CN=ISRG Root X1, O=Internet Security Research Group, C=US; RSA 4096-bit, sha256RSA; valid 2015-06-04 11:04:38 to 2035-06-04 11:04:38 UTC, 3174 day(s) left.
@@ -187,9 +197,64 @@ The bodies are not kept unless `ocpi.logging.payloads` in the configuration file
 says so, and none of it is written to disk: how long a hub may keep its peers'
 business is a question with a different answer in every jurisdiction. A
 deployment that has to keep more should read the stream and put it where it has
-decided to keep it. Reading it is its own permission, `readTraffic`, and not
-part of `readConfiguration`: the configuration is what this hub is, and the
+decided to keep it. Reading it is its own permission, `traffic:read`, and not
+part of `configuration:read`: the configuration is what this hub is, and the
 traffic is what its peers did through it.
+
+
+### Who may do what
+
+Three roles, and the accounts' groups are what gives them: `viewer` may look
+at the hub and at who is on it and do nothing, and may not read the traffic;
+`hub` runs it from day to day - the name servers and the time servers, and the
+traffic; `systemadmin` may do everything, and is the only one who lets a peer
+in or changes what the hub believes, and nothing but the hub says what it may
+do. The `roles` section of `configuration.json` adds roles, or says
+differently what `viewer` or `hub` may do:
+
+```json
+"roles": { "support": [ "configuration:read", "dns:read", "nts:read", "traffic:read" ] }
+```
+
+What each role may do, resource by resource, is in
+[libs/RoamingHub](libs/RoamingHub#who-may-do-what).
+
+
+### Certificates
+
+What this hub believes in TLS, what it will present and every server it
+recognises lives in one store, `certificates/` beside the configuration file,
+managed on the **Certificates** page or from the command line. A hub keeps the
+four kinds of TLS and none of the seven of ISO 15118, which are a vehicle's:
+a **tlsRoot** says which time server and which name server over TLS or HTTPS
+may be believed, beside the roots of the machine, and a **tlsServer** is a
+server's own certificate, kept so that the server can be held to it by its
+fingerprint. Both are told what they are for - `nts`, `dns` or both. A
+**clientRoot** and a **tlsIdentity** are kept, and used by nothing here yet.
+
+```
+dotnet run --project RoamingHubCLI -- --import-certificate tlsRoot=our-time-servers-root.pem --list-certificates
+```
+
+Importing a root makes it believed - for every use, until the Certificates
+page says what it is for. PEM, DER and PKCS#12 all go in; a password for a
+protected PKCS#12 is read from `ROAMINGHUB_CERT_PASSWORD` where
+`--certificate-password` is not given, because a password given as a switch
+stands in the process list for every other user of the machine. A relative
+`--certificates <dir>` is measured from where the hub is started, as every
+other path on the command line is.
+
+**The private keys in the store are not encrypted.** What guards them is the
+file system, so the store belongs on a machine whose users are all trusted
+with this hub's identity; the hub says so at every start with a key in it.
+
+A time server, and a name server over TLS or HTTPS, can be held to more than a
+certificate authority vouching for it - the certificates it may show and the
+roots its chain may end at, by their fingerprints, or whatever it was first
+believed with. That goes into a server's dialog on the **NTS** and **DNS**
+pages, and what every server was last believed with is kept in
+`known-servers.json`, so that another certificate is noticed even where a
+server is held to none.
 
 
 ### Where things are
@@ -201,7 +266,7 @@ traffic is what its peers did through it.
 | `libs/RoamingHub/RoamingHub/` | the hub itself - its section of the configuration, its JSON API, its OCPI bindings, its traffic log |
 | `libs/RoamingHub/RoamingHub/Frontend/` | the web interface: TypeScript and SCSS, bundled by webpack |
 | `libs/RoamingHub/RoamingHubTests/` | what a hub does when a peer, or a stranger, talks to it |
-| `libs/WWCP_Node/` | what the hub is before it is a hub: the log, the configuration file, name resolution and the time, the accounts and the web server |
+| `libs/WWCP_Node/` | what the hub is before it is a hub: the log, the configuration file, name resolution and the time, the certificate store, the accounts and their roles, and the web server |
 | `libs/WWCP_OCPI/` | the protocol: OCPI 2.2.1 and 2.3.0 |
 
 The command line is this program's vocabulary and nothing else - the switches

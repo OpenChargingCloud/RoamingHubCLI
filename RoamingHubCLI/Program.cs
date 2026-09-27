@@ -23,6 +23,7 @@ using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 using cloud.charging.open.RoamingHub.CommandLine;
 using cloud.charging.open.RoamingHub.Configuration;
 using cloud.charging.open.protocols.WWCP.Node;
+using cloud.charging.open.protocols.WWCP.Node.Certificates;
 using cloud.charging.open.protocols.WWCP.Node.Configuration;
 using cloud.charging.open.protocols.WWCP.Node.Logging;
 
@@ -41,6 +42,18 @@ namespace cloud.charging.open.RoamingHub.CLI
     /// </summary>
     public class Program
     {
+
+        #region Data
+
+        /// <summary>
+        /// Where a password for a protected PKCS#12 is read from when the
+        /// command line gives none - named like the vehicle's EV_CERT_PASSWORD
+        /// and the gateway's GATEWAY_CERT_PASSWORD, so that one of these
+        /// programs set up beside another is set up the same way.
+        /// </summary>
+        private const String CertificatePasswordVariable = "ROAMINGHUB_CERT_PASSWORD";
+
+        #endregion
 
         #region (private static) TryTakeValue(Arguments, ref Index, out Value)
 
@@ -101,12 +114,75 @@ namespace cloud.charging.open.RoamingHub.CLI
 
         #endregion
 
+        #region (private static) ListCertificates(Hub)
+
+        /// <summary>
+        /// What is in this hub's certificate store, as a table.
+        /// </summary>
+        /// <remarks>
+        /// Printed and not returned: this is what <c>--list-certificates</c>
+        /// exists for - what the store holds, whether each one is switched on,
+        /// until when, and what a root or a server certificate is kept for,
+        /// for somebody at a console rather than on the Certificates page.
+        /// Without the vehicle's "chosen" beside a line: a hub has no session
+        /// that picks one certificate of a kind, and every usable root is
+        /// believed.
+        /// </remarks>
+        private static void ListCertificates(Hub hub)
+        {
+
+            Console.WriteLine();
+            Console.WriteLine($"  Certificates in {hub.Certificates.Directory}");
+            Console.WriteLine();
+
+            var entries = hub.Certificates.Entries;
+
+            if (entries.Count == 0)
+            {
+                Console.WriteLine("  (empty - put one there with --import-certificate <kind>=<file>)");
+                Console.WriteLine();
+                return;
+            }
+
+            foreach (var kind in hub.Certificates.Kinds)
+            {
+
+                var ofKind = entries.Where(entry => entry.Kind == kind).ToArray();
+
+                if (ofKind.Length == 0)
+                    continue;
+
+                Console.WriteLine($"  {kind.Describe()}");
+
+                foreach (var entry in ofKind)
+                {
+
+                    var state = !entry.IsActive       ? "off"
+                                : entry.IsExpired     ? "EXPIRED"
+                                : entry.IsNotYetValid ? "not yet valid"
+                                : "on";
+
+                    Console.WriteLine($"    {entry.Id}  {state,-13}  until {entry.NotAfter.UtcDateTime:yyyy-MM-dd}  " +
+                                      $"{entry.Label}{(kind.HasUsages() ? $"  ({CertificateUsages.Describe(entry.Usages)})" : "")}");
+
+                }
+
+                Console.WriteLine();
+
+            }
+
+        }
+
+        #endregion
+
         #region (private static) PrintUsage()
 
         private static void PrintUsage()
         {
             Console.WriteLine("Usage: RoamingHubCLI [--port <number>] [--any] [--frontend <dist directory>]");
             Console.WriteLine("                     [--config <file>] [--accounts <directory>]");
+            Console.WriteLine("                     [--certificates <directory>] [--import-certificate <kind>=<file>]");
+            Console.WriteLine("                     [--certificate-password <password>] [--list-certificates]");
             Console.WriteLine("                     [--verbose | --quiet] [--no-trace]");
             Console.WriteLine();
             Console.WriteLine("Server:");
@@ -133,15 +209,41 @@ namespace cloud.charging.open.RoamingHub.CLI
             Console.WriteLine($"                    the file: the OCPI library keeps them below {Hub.OCPIDirectoryName}/ beside it, one");
             Console.WriteLine("                    set per OCPI version, and reads them back at every start.");
             Console.WriteLine();
+            Console.WriteLine("The certificate store. Everything this hub believes and presents in TLS is kept");
+            Console.WriteLine("here, one file per certificate, and switched on and off one at a time:");
+            Console.WriteLine($"  --certificates <dir>      where the store is (default: {CertificatesConfiguration.DefaultDirectory}/ beside the");
+            Console.WriteLine("                    configuration file, or what the file's certificates.directory");
+            Console.WriteLine("                    says). Certificates already in that directory are read again at");
+            Console.WriteLine("                    every start, so copying one in is a way to install it. The");
+            Console.WriteLine("                    Certificates page manages the same store");
+            Console.WriteLine("  --import-certificate <kind>=<file>");
+            Console.WriteLine("                    copy a certificate into the store, as PEM, DER or PKCS#12. A root");
+            Console.WriteLine("                    is a certificate on its own; a tlsIdentity has to bring its private");
+            Console.WriteLine("                    key, so a PEM for one carries the key beside it. May be given");
+            Console.WriteLine("                    several times. <kind> is one of:");
+            Console.WriteLine("                      tlsRoot    what a name or a time server over TLS may chain to");
+            Console.WriteLine("                      tlsServer  a server's own certificate, to hold it to by fingerprint");
+            Console.WriteLine("                      clientRoot, tlsIdentity  kept, and used by nothing here yet");
+            Console.WriteLine("                    A tlsRoot or a tlsServer goes in for every use; the Certificates");
+            Console.WriteLine("                    page says what it is for - the time servers, the name servers.");
+            Console.WriteLine("                    A root is believed as soon as it is in");
+            Console.WriteLine("  --certificate-password <pw>");
+            Console.WriteLine("                    what opens a protected PKCS#12 being imported. Used once and not");
+            Console.WriteLine("                    kept: the store holds what it has without a password. A password");
+            Console.WriteLine("                    given here stands in the process list for every other user of the");
+            Console.WriteLine($"                    machine, so prefer the environment: {CertificatePasswordVariable}");
+            Console.WriteLine("  --list-certificates       print the store, with the handle of each certificate");
+            Console.WriteLine();
             Console.WriteLine("Traffic:");
             Console.WriteLine("  Every OCPI call that touched this hub is written down - which way it went, which");
             Console.WriteLine("  peer was at the other end, the two parties, the HTTP status and the OCPI status");
             Console.WriteLine("  inside the envelope, how long it took - and served at /api/v1/traffic, with a");
-            Console.WriteLine("  stream beside it. Reading it is its own permission, readTraffic, and not part of");
-            Console.WriteLine("  readConfiguration: the configuration is what this hub is, and the traffic is what");
-            Console.WriteLine("  its peers did through it. It is in memory and nowhere else, and the bodies are");
-            Console.WriteLine("  left out unless the configuration file says ocpi.logging.payloads. A deployment");
-            Console.WriteLine("  that has to keep more should read the stream and put it where it keeps such things.");
+            Console.WriteLine("  stream beside it. Reading it is its own permission, traffic:read, and not part of");
+            Console.WriteLine("  configuration:read: the configuration is what this hub is, and the traffic is what");
+            Console.WriteLine("  its peers did through it. The hub role may read it and the viewer may not. It is");
+            Console.WriteLine("  in memory and nowhere else, and the bodies are left out unless the configuration");
+            Console.WriteLine("  file says ocpi.logging.payloads. A deployment that has to keep more should read");
+            Console.WriteLine("  the stream and put it where it keeps such things.");
             Console.WriteLine();
             Console.WriteLine("OCPI versions:");
             Console.WriteLine($"  {String.Join(" and ", OCPIConfiguration.KnownVersions)}, and no 2.1.1: the hub role arrived with OCPI 2.2, and the library");
@@ -180,6 +282,13 @@ namespace cloud.charging.open.RoamingHub.CLI
             var      verbose         = false;
             var      quiet           = false;
             var      noTrace         = false;
+
+            String?  certificatesDir   = null;
+            String?  certPassword      = null;
+            var      listCertificates  = false;
+
+            // Repeatable, and imported in the order they were typed.
+            var      imports           = new List<(CertificateKind Kind, String File)>();
 
             for (var i = 0; i < Arguments.Length; i++)
             {
@@ -240,6 +349,63 @@ namespace cloud.charging.open.RoamingHub.CLI
                     case "--no-trace":
                         noTrace = true;
                         break;
+
+                    case "--certificates":
+                        if (!TryTakeValue(Arguments, ref i, out certificatesDir))
+                        {
+                            Console.Error.WriteLine("Missing directory after --certificates!");
+                            return 2;
+                        }
+                        break;
+
+                    case "--certificate-password":
+                        if (!TryTakeValue(Arguments, ref i, out certPassword))
+                        {
+                            Console.Error.WriteLine("Missing password after --certificate-password!");
+                            return 2;
+                        }
+                        break;
+
+                    case "--list-certificates":
+                        listCertificates = true;
+                        break;
+
+                    case "--import-certificate":
+                    {
+
+                        if (!TryTakeValue(Arguments, ref i, out var import) || import is null)
+                        {
+                            Console.Error.WriteLine("Missing <kind>=<file> after --import-certificate!");
+                            return 2;
+                        }
+
+                        // Split at the FIRST '=' only: everything after it is
+                        // the path, and a Windows path is full of things that
+                        // are not separators.
+                        var split = import.IndexOf('=');
+
+                        if (split < 1 || split == import.Length - 1)
+                        {
+                            Console.Error.WriteLine($"--import-certificate wants <kind>=<file>, and '{import}' is not that.");
+                            return 2;
+                        }
+
+                        // The kinds a hub keeps, and not every kind there is: a
+                        // vehicle's root named here would only be refused by the
+                        // store, once the hub had been made.
+                        if (!CertificateKindExtensions.TryParseKind(import[..split], out var importKind) ||
+                            !Hub.CertificateKinds.Contains(importKind))
+                        {
+                            Console.Error.WriteLine($"'{import[..split]}' is not a kind of certificate a roaming hub keeps. " +
+                                                    $"Use one of {String.Join(", ", Hub.CertificateKinds.Select(one => one.AsText()))}.");
+                            return 2;
+                        }
+
+                        imports.Add((importKind, import[(split + 1)..]));
+
+                        break;
+
+                    }
 
                     case "-h":
                     case "--help":
@@ -306,6 +472,14 @@ namespace cloud.charging.open.RoamingHub.CLI
 
                           Frontend:         frontend,
 
+                          // Measured from where the hub is started, as every
+                          // other path on this command line is. Handed on
+                          // relative, it would be measured from the
+                          // configuration file.
+                          CertificatesPath: certificatesDir is not null
+                                                ? Path.GetFullPath(certificatesDir)
+                                                : null,
+
                           ConsoleLogLevel:  verbose ? LogLevel.Debug
                                                 : quiet ? LogLevel.Warning
                                                 : LogLevel.Info,
@@ -330,6 +504,53 @@ namespace cloud.charging.open.RoamingHub.CLI
 
             await using (hub)
             {
+
+                #region What the switches said about certificates
+
+                // Before the start, so that a root imported here is believed by
+                // the first key exchange with a time server, and not only by the
+                // one after it.
+                foreach (var (kind, file) in imports)
+                {
+
+                    if (!File.Exists(file))
+                    {
+                        Console.Error.WriteLine($"--import-certificate: there is no file '{file}'.");
+                        return 2;
+                    }
+
+                    Byte[] content;
+
+                    try
+                    {
+                        content = await File.ReadAllBytesAsync(file);
+                    }
+                    catch (Exception problem)
+                    {
+                        Console.Error.WriteLine($"--import-certificate: '{file}' could not be read: {problem.Message}");
+                        return 2;
+                    }
+
+                    if (!hub.Certificates.Import(content,
+                                                 kind,
+                                                 certPassword ?? Environment.GetEnvironmentVariable(CertificatePasswordVariable),
+                                                 Label: null,
+                                                 out var imported,
+                                                 out var problem2))
+                    {
+                        Console.Error.WriteLine($"--import-certificate: {file} could not be imported as " +
+                                                $"{kind.AsText()}: {problem2}");
+                        return 2;
+                    }
+
+                    Console.WriteLine($"  imported        {imported.Label} as {kind.AsText()}, handle {imported.Id}");
+
+                }
+
+                if (listCertificates)
+                    ListCertificates(hub);
+
+                #endregion
 
                 try
                 {
@@ -391,6 +612,7 @@ namespace cloud.charging.open.RoamingHub.CLI
                 }
 
                 Console.WriteLine($"  configuration   {hub.ConfigFile.Path}");
+                Console.WriteLine($"  certificates    {hub.Certificates.Entries.Count} in {hub.Certificates.Directory}");
                 Console.WriteLine($"  accounts        {hub.ExtAPI.Users.Count()} user(s) in {hub.AccountsPath}");
                 Console.WriteLine($"  sign in at      {hub.WebInterfaceURL}{extPath}/login");
                 Console.WriteLine($"  OCPI party      {hub.PartyIdText} ({hub.BusinessDetails.Name})");
