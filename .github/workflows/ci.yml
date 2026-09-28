@@ -157,13 +157,13 @@ jobs:
       # Four questions are asked of it. "/" must come back as the embedded web
       # interface. "/api/v1/status" must come back 401, because the JSON API of
       # a hub is nobody's business until somebody has signed in — a 200 there
-      # would mean the door had come off. The clock,
-      # "/api/v1/configuration/time", must come back 401 as well, and for one
-      # more reason: an unknown path under /api answers 404, so a 401 is also
-      # what proves the route is there at all. And "/ext/versions", the one URL
-      # a peer is given, must come back 200 with 2.2.1 in its list: everything
-      # else of OCPI is found from there, so without it this would be a hub
-      # nobody can be peered with.
+      # would mean the door had come off. The clock, "/api/v1/clock", must come
+      # back 401 as well, and for one more reason: an unknown path under /api
+      # answers 404, so a 401 is also what proves the route is there at all -
+      # at the path every node has it at now, which the node's JSON API
+      # answers. And "/ext/versions", the one URL a peer is given, must come
+      # back 200 with 2.2.1 in its list: everything else of OCPI is found from
+      # there, so without it this would be a hub nobody can be peered with.
       - name: The hub starts and answers (Debian)
         if: matrix.leg == 'debian-13-container'
         timeout-minutes: 5
@@ -197,7 +197,7 @@ jobs:
           api="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18128/api/v1/status 2>/dev/null || true)"
           api="${api:-000}"
 
-          clock="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18128/api/v1/configuration/time 2>/dev/null || true)"
+          clock="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18128/api/v1/clock 2>/dev/null || true)"
           clock="${clock:-000}"
 
           versions="$(curl -sS -o "$tmp/versions.json" -w '%{http_code}' http://127.0.0.1:18128/ext/versions 2>/dev/null || true)"
@@ -212,7 +212,7 @@ jobs:
 
           echo "GET /                            -> $root"
           echo "GET /api/v1/status               -> $api"
-          echo "GET /api/v1/configuration/time   -> $clock"
+          echo "GET /api/v1/clock                -> $clock"
           echo "GET /ext/versions                -> $versions"
 
           # What the banner says this was built from - in every run, not only a
