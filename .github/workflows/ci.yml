@@ -122,15 +122,14 @@ jobs:
         timeout-minutes: 10
         run: dotnet test libs/WWCP_Node/WWCP_Node_Tests/WWCP_Node_Tests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --logger "trx;LogFileName=node-${{ matrix.leg }}.trx" --results-directory artifacts
 
-      # The hub's own tests. Nowhere else runs them — libs/RoamingHub has no
-      # workflow of its own, by design: it is not built alone, it is built
-      # here.
+      # The hub's own tests, and WWCP_Node's conformance suite asked of a hub.
+      # Nowhere else runs them — libs/RoamingHub has no workflow of its own,
+      # by design: it is not built alone, it is built here.
       #
       # No category filter: nothing in this project asks the internet anything.
-      # The peerings are walked against a stub on this machine, name resolution
-      # is switched off where a time server is tested, and the tests that need
-      # the time client switched on start the hub on a clock whose timers never
-      # fire.
+      # The peerings are walked against a stub on this machine, and the suite
+      # keeps the hub it asks off the network by design - see
+      # NodeConformanceTests in WWCP_Node_TestKit.
       - name: Test the hub
         timeout-minutes: 30
         run: dotnet test libs/RoamingHub/RoamingHubTests/RoamingHubTests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}.trx" --results-directory artifacts
