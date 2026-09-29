@@ -19,7 +19,7 @@
 
 using System.Reflection;
 
-using org.GraphDefined.Vanaheimr.CLI;
+using cloud.charging.open.protocols.WWCP.Node.CommandLine;
 
 // Inside this namespace "RoamingHub" is the namespace and not the class, so
 // the class needs a name of its own here.
@@ -34,21 +34,17 @@ namespace cloud.charging.open.RoamingHub.CommandLine
     /// The command line of a running roaming hub.
     /// </summary>
     /// <remarks>
-    /// Everything a command needs is reachable from here, which is why every
-    /// command takes one of these: the hub itself, and through it its
-    /// configuration, its log and everything the JSON API can do. A command is
-    /// a second way of asking for the same thing as the web interface - never
-    /// an implementation of its own.
-    ///
-    /// Commands are not listed anywhere. The constructor asks Styx to walk this
-    /// assembly for anything that implements ICLICommand and can be built from
-    /// a HubCLI, so a new command is a new file and nothing else.
+    /// The node's command line, with the commands every node has - syncNTS
+    /// among them - and the console until 'quit', Ctrl+C or SIGTERM. What only
+    /// a roaming hub can be told is a command built from a HubCLI in this
+    /// assembly, found as the node's are: a new command is a new file and
+    /// nothing else.
     ///
     /// Not in a namespace called CLI, as the program is: Styx's command line
     /// class is called that, and a namespace of the same name one level up
     /// would be found first.
     /// </remarks>
-    public class HubCLI : org.GraphDefined.Vanaheimr.CLI.CLI
+    public class HubCLI : NodeCLI
     {
 
         #region Data
@@ -75,11 +71,11 @@ namespace cloud.charging.open.RoamingHub.CommandLine
         /// Create the command line of the given roaming hub.
         /// </summary>
         /// <param name="Hub">The running roaming hub.</param>
-        /// <param name="AssembliesWithCLICommands">Further assemblies to search for commands. This one is searched either way.</param>
+        /// <param name="AssembliesWithCLICommands">Further assemblies to search for commands. This one and the node's are searched either way.</param>
         public HubCLI(Hub                Hub,
                       params Assembly[]  AssembliesWithCLICommands)
 
-            : base(AssembliesWithCLICommands)
+            : base(Hub, AssembliesWithCLICommands)
 
         {
 
