@@ -92,15 +92,42 @@ counterpart directly.
 
 `dotnet run --project RoamingHubCLI -- --help` lists the rest: `--port`,
 `--any`, `--accounts <dir>`, `--frontend <dir>`, `--config <file>`,
-`--certificates <dir>`, `--import-certificate <kind>=<file>`,
-`--certificate-password <pw>`, `--list-certificates`, `--verbose`, `--quiet`,
-`--no-trace`.
+`--verbose`, `--quiet`, `--no-trace`, `--log-file <dir>`, `--no-log-file`,
+and the certificate store's `--certificates <dir>`,
+`--import-certificate <kind>=<file>`, `--certificate-password <pw>` and
+`--list-certificates`. They are every node's switches, read by WWCP_Node, as
+is what the console says once the hub is up.
 
-Beside the solution, then, a first start leaves `accounts/`, `ocpi/` and the
-certificate store `certificates/`; `configuration.json` follows when a page
-first saves something, and `known-servers.json` when a server is first
-believed. All of them are this installation's and none of them the source's,
-so git ignores them.
+Beside the solution, then, a first start leaves `accounts/`, `ocpi/`, the
+certificate store `certificates/` and the log files in `logs/`;
+`configuration.json` follows when a page first saves something, and
+`known-servers.json` when a server is first believed. All of them are this
+installation's and none of them the source's, so git ignores them.
+
+
+### The log
+
+Everything that happens is written three times over, because the three answer
+different questions. The **console** shows what is going on to whoever is
+watching, at the level `--verbose` and `--quiet` choose. The **Logs** page
+keeps the last two thousand entries for whoever asks, and loses them when the
+process ends. And `logs/` beside the solution keeps one file per UTC day, every
+entry down to the debug ones, for the afternoon somebody asks what happened
+last night - `--log-file <dir>` puts it elsewhere, `--no-log-file` leaves it
+out, and nothing in it is ever deleted. Which directory it is, the start says
+under `log files`, and the Configuration page on its Event log card.
+
+Below it, `metrological/` is the hub's log book: what bears on the time it
+stamps things with and on what it trusts - its starts and its ends, every
+synchronisation with what each time server answered, every change of its time
+servers and of its certificates - one line after the other, each pointing back
+at the one before and signed with a key kept beside them, `signing-key.pem`. A
+file per day, never thinned out; without log files there is no log book
+either. It is [WWCP_Node](https://github.com/OpenChargingCloud/WWCP_Node)'s,
+and its README says how a chain is checked.
+
+What the peers did through the hub is in neither: the
+[traffic](#the-traffic-which-is-the-point-of-a-hub) stays in memory.
 
 
 ### Typing at it
@@ -261,7 +288,7 @@ server is held to none.
 
 | | |
 |---|---|
-| `RoamingHubCLI/` | the command line: switches, and what the console says at a start |
+| `RoamingHubCLI/` | the command line: what -h and the console say of the hub at a start, among every node's switches and lines |
 | `RoamingHubCLI/CLI/` | the prompt, and one file per command that can be typed at it |
 | `libs/RoamingHub/RoamingHub/` | the hub itself - its section of the configuration, its JSON API, its OCPI bindings, its traffic log |
 | `libs/RoamingHub/RoamingHub/Frontend/` | the web interface: TypeScript and SCSS, bundled by webpack |

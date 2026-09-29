@@ -266,6 +266,16 @@ __pycache__/
 # quietly swallow a source folder of the same name.
 /accounts/
 
+# What this hub wrote down about its own runs: a file per day, and below
+# metrological/ the log book, with the private key that signs it. A record of
+# what this machine did rather than of what the source says - the same reason
+# as the accounts above, and the same anchor.
+#
+# "*.log" further up covers the day's files and nothing of the log book; this
+# covers the directory, so that neither the key nor the book can be committed,
+# and the build stamp does not call every tree dirty once they are there.
+/logs/
+
 # What a running hub is configured as: its name servers, its time servers and
 # who it is in OCPI. A property of this particular installation, not of the
 # source.
