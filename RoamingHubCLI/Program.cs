@@ -40,8 +40,9 @@ namespace cloud.charging.open.RoamingHub.CLI
     /// the words -h explains them with, why it could not be set up or could not
     /// start, what goes into the certificate store, the banner and the prompt.
     /// What is left here is the hub's: what its configuration holds, what -h
-    /// says of its traffic and its OCPI versions, and what its banner says of
-    /// both.
+    /// says of its traffic, its OCPI versions and the certificates it keeps
+    /// for nothing yet, and what its banner says of its traffic and its OCPI
+    /// side.
     /// </remarks>
     public class Program
     {
@@ -68,6 +69,8 @@ namespace cloud.charging.open.RoamingHub.CLI
                                 "beside it, one set per OCPI version, and reads them back at every start.",
 
             CertificateKinds:   Hub.CertificateKinds,
+
+            CertificatesSays:   "clientRoot and tlsIdentity are kept, and used by nothing here yet.",
 
             BeforeTheLog:       [
 
