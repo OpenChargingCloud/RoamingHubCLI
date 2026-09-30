@@ -83,7 +83,9 @@ not changeable while running: it is what every peer wrote into its credentials,
 and changing it under a live registration would not rename the hub, it would
 make it a second one nobody is peered with. The peers themselves are not in the
 file: the OCPI library keeps them in append-only files of its own below `ocpi/`
-beside it, one set per version, and reads them back at every start.
+beside it, one set per version, and reads them back at every start. A peer is
+added or removed only once its file has it: where that file cannot be written,
+the Peers page is answered 500 with why, and nothing changes.
 
 **No OCPI 2.1.1, and there cannot be.** The hub role arrived with OCPI 2.2 and
 the library has no hub side for the version before it. A CPO or an EMSP that
