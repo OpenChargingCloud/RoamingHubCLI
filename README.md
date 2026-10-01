@@ -84,8 +84,12 @@ and changing it under a live registration would not rename the hub, it would
 make it a second one nobody is peered with. The peers themselves are not in the
 file: the OCPI library keeps them in append-only files of its own below `ocpi/`
 beside it, one set per version, and reads them back at every start. A peer is
-added or removed only once its file has it: where that file cannot be written,
-the Peers page is answered 500 with why, and nothing changes.
+added, removed or registered only once its file has it: where that file cannot
+be written, the Peers page is answered 500 with why, and nothing changes - but
+for a registration the peer has accepted already, which is in effect and
+written down with the next change the file takes, or when the hub stops. A
+peer that registers here or unregisters meanwhile is answered OCPI 3000 with
+HTTP 500, its token as it was.
 
 **No OCPI 2.1.1, and there cannot be.** The hub role arrived with OCPI 2.2 and
 the library has no hub side for the version before it. A CPO or an EMSP that
