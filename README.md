@@ -89,7 +89,9 @@ be written, the Peers page is answered 500 with why, and nothing changes - but
 for a registration the peer has accepted already, which is in effect and
 written down with the next change the file takes, or when the hub stops. A
 peer that registers here or unregisters meanwhile is answered OCPI 3000 with
-HTTP 500, its token as it was.
+HTTP 500, its token as it was. Any OCPI call the hub fails to handle is
+answered OCPI 3000 with HTTP 500 and the request and correlation ids to quote,
+and nothing of what failed: that is in the hub's log, under the same ids.
 
 **No OCPI 2.1.1, and there cannot be.** The hub role arrived with OCPI 2.2 and
 the library has no hub side for the version before it. A CPO or an EMSP that
