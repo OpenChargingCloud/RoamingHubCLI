@@ -19,6 +19,8 @@
 
 using System.Reflection;
 
+using org.GraphDefined.Vanaheimr.CLI;
+
 using cloud.charging.open.protocols.WWCP.Node.CommandLine;
 
 // Inside this namespace "RoamingHub" is the namespace and not the class, so
@@ -76,6 +78,29 @@ namespace cloud.charging.open.RoamingHub.CommandLine
                       params Assembly[]  AssembliesWithCLICommands)
 
             : base(Hub, AssembliesWithCLICommands)
+
+        {
+
+            this.Hub = Hub;
+
+            RegisterCLIType(typeof(HubCLI));
+
+        }
+
+        /// <summary>
+        /// Create the command line of the given Hub on the given terminal,
+        /// for the given caller - a session over SSH.
+        /// </summary>
+        /// <param name="Hub">The running Hub.</param>
+        /// <param name="Terminal">What the command line is typed at and written on.</param>
+        /// <param name="Caller">Who is typing at it.</param>
+        /// <param name="AssembliesWithCLICommands">Further assemblies to search for commands. This one and the node's are searched either way.</param>
+        public HubCLI(Hub                Hub,
+                      ICLITerminal       Terminal,
+                      CLICaller          Caller,
+                      params Assembly[]  AssembliesWithCLICommands)
+
+            : base(Hub, Terminal, Caller, AssembliesWithCLICommands)
 
         {
 

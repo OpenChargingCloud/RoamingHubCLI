@@ -211,6 +211,45 @@ libs/RoamingHub/RoamingHub/Frontend/dist`: a reload in the browser then shows
 the change, without rebuilding the C# side.
 
 
+### Typing at it over SSH
+
+The same prompt is served over SSH, on port 22356 — twenty thousand above the
+web interface's — and on the addresses the web interface listens on: the
+loopback, or every address with `--any`. Nothing else is: no shell of the
+machine, no files, no tunnels. `--ssh-port` moves it, `--no-ssh` switches it
+off.
+
+Whoever signs in is an account of the roaming hub, under its name, with a key
+of its own. The first start makes `root`; give it your public key once:
+
+```
+dotnet run --project RoamingHubCLI -- --authorize-ssh-key root=C:\Users\you\.ssh\id_ed25519.pub
+```
+
+An OpenSSH `.pub` goes in as it is, and so does what PuTTYgen saves with *Save
+public key*. The key is kept in `accounts/ssh/root`, a file in the format of
+`authorized_keys`, and putting a line into it by hand does the same; taking one
+out locks that key out at once. Then:
+
+```
+ssh -p 22356 root@127.0.0.1
+```
+
+or, in PuTTY, host `127.0.0.1`, port `22356`, *Connection → Data → Auto-login
+username* `root`, and the private key under *Connection → SSH → Auth →
+Credentials*. The first time, PuTTY asks whether to trust the roaming hub's
+host key: the banner prints its fingerprint under `SSH`, to compare it with.
+
+Everything works as at the console — Tab, the history, the log above the line
+being typed — with three differences. `quit`, `exit` and Ctrl+D leave the
+session, and the roaming hub keeps running. The account may do what its roles
+let it do on the web interface, and the log names it: "'root' at the command
+line over SSH asked this roaming hub to synchronise its time.", tagged `cli`
+and `ssh`. And the session's log starts at the console's level and is its own:
+`log debug` shows everything here, `log off` nothing, for this session alone.
+`who` says who else is signed in.
+
+
 ### The traffic, which is the point of a hub
 
 Two peers that talk directly can each read their own log and compare them. The

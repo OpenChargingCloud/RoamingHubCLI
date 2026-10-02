@@ -141,7 +141,8 @@ namespace cloud.charging.open.RoamingHub.CLI
                           CertificatesPath:  arguments.CertificatesPath,
                           ConsoleLogLevel:   arguments.ConsoleLogLevel,
                           LogPath:           arguments.LogPathBelow(root),
-                          BridgeDebugLog:    !arguments.NoTrace
+                          BridgeDebugLog:    !arguments.NoTrace,
+                          SSH:               arguments.SSH
                       );
             }
             catch (Exception e)
@@ -151,6 +152,10 @@ namespace cloud.charging.open.RoamingHub.CLI
 
             await using (hub)
             {
+
+                // What somebody signed in over SSH gets: this program's own command
+                // line, with its commands beside the node's.
+                hub.CommandLines = (terminal, caller) => new HubCLI(hub, terminal, caller);
 
                 if (hub.ImportCertificates(arguments, out _) is Int32 notImported)
                     return notImported;
