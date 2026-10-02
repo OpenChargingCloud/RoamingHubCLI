@@ -83,7 +83,8 @@ not changeable while running: it is what every peer wrote into its credentials,
 and changing it under a live registration would not rename the hub, it would
 make it a second one nobody is peered with. The peers themselves are not in the
 file: the OCPI library keeps them in append-only files of its own below `ocpi/`
-beside it, one set per version, and reads them back at every start. A peer is
+beside it, one set per version, and reads them back at every start - a line it
+cannot read is passed over, and the hub's log says so. A peer is
 added, removed or registered only once its file has it: where that file cannot
 be written, the Peers page is answered 500 with why, and nothing changes - but
 for a registration the peer has accepted already, which is in effect and
