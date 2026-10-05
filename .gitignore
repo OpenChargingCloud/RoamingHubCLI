@@ -287,6 +287,13 @@ configuration.json
 # A record of what this machine saw, like the log, and not of the source.
 known-servers.json
 
+# Its SSH host key, the private half of who this vehicle is to every SSH
+# client: made at the first start with the SSH server on, and kept beside the
+# configuration file. Whoever has it can pose as this vehicle to anybody who
+# trusted it once - more to lose than the certificate store, and anchored the
+# same way. The public keys allowed to sign in live below /accounts/ already.
+/ssh/
+
 # The hub's certificate store, beside the configuration file: the roots its
 # time servers and name servers are believed through, the certificates they
 # are recognised by - and whatever is imported with a private key. This
