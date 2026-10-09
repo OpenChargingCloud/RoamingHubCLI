@@ -269,7 +269,10 @@ sshKeys root remove SHA256:abc
 
 `remove` takes the fingerprint `sshKeys` lists, or enough of its beginning, and
 locks that key out at once. `apiKeys` does the same for the account's API keys,
-and shows a new one once, when it is made. Then:
+and shows a new one once, when it is made. In the web interface, the name at
+the foot of the menu opens the account's own page: its details, and its API
+keys and SSH keys to add, switch off and on, and remove - for every account,
+whatever its roles. Then:
 
 ```
 ssh -p 22356 root@127.0.0.1
