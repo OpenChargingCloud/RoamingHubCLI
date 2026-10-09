@@ -230,6 +230,14 @@ loopback, or every address with `--any`. Nothing else is: no shell of the
 machine, no files, no tunnels. `--ssh-port` moves it, `--no-ssh` switches it
 off.
 
+The web interface has it under **Configuration → SSH server**: whether it
+runs, on which address and port, its host key with the fingerprint and the
+`known_hosts` line, who is connected and the keys of the accounts. Whoever may
+edit it - an administrator, as neither the viewer nor the hub role may - switches
+it on and off, moves its port and lets passwords in there, in effect at once;
+where a switch on the command line says otherwise, the switch wins and the page
+says so.
+
 Whoever signs in is an account of the roaming hub, under its name, with a key
 of its own. The first start makes `root`; give it your public key with that
 very start - the way recommended:
@@ -337,7 +345,8 @@ a **tlsRoot** says which time server and which name server over TLS or HTTPS
 may be believed, beside the roots of the machine, and a **tlsServer** is a
 server's own certificate, kept so that the server can be held to it by its
 fingerprint. Both are told what they are for - `nts`, `dns` or both. A
-**clientRoot** and a **tlsIdentity** are kept, and used by nothing here yet.
+**clientRoot** and a **tlsIdentity** are kept, and used by nothing here yet;
+the identity, as everything with a private key, on the **Identities** page.
 
 ```
 dotnet run --project RoamingHubCLI -- --import-certificate tlsRoot=our-time-servers-root.pem --list-certificates
