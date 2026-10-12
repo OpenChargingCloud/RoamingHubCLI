@@ -10,6 +10,6 @@ git pull --ff-only
 git submodule update --init --recursive
 git submodule foreach git checkout master
 git submodule foreach git pull
-npm --prefix /home/ahzf/RoamingHubCLI/libs/RoamingHub/RoamingHub/Frontend ci
+npm --prefix libs/RoamingHub/RoamingHub/Frontend ci
 #dotnet build RoamingHubCLI.slnx --configuration Release
 dotnet build RoamingHubCLI.slnx
