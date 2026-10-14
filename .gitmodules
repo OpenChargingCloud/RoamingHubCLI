@@ -25,3 +25,6 @@
 [submodule "libs/WWCP_POI"]
 	path = libs/WWCP_POI
 	url = https://github.com/OpenChargingCloud/WWCP_POI.git
+[submodule "libs/WWCP_DatexII"]
+	path = libs/WWCP_DatexII
+	url = https://github.com/OpenChargingCloud/WWCP_DatexII.git
