@@ -200,7 +200,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
   boundaries.
 
 ### 17. Status types accept any text, and nothing aggregates them
-`design` · medium · repository: WWCP_POI (WWCP_POI2) · **reframed: accepting any text is intended (future values); open is only a status of groups calculated by a delegate, design proposed**
+`design` · medium · repository: WWCP_POI (WWCP_POI2) · **reframed: accepting any text is intended (future values); open is only a status of groups calculated by a delegate, design proposed** · **fixed in WWCP_POI 03f53ad: group status set manually or calculated by a delegate (RoamingNetworkRuntimeStatus.CalculateStatus…, POIGroupStatus defaults)**
 
 - **Where:** e.g. `WWCP_POI2/.../EVSE/AdminStatus/EVSEAdminStatusType.cs:146-160` (any trimmed non-empty
   text; the same in all `*StatusType`s).
