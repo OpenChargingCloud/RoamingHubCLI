@@ -160,7 +160,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 - **Fix:** default to `Expanded`, or write ids only for well-known licenses.
 
 ### 13. Child changes don't update the operator's `lastChange`
-`design` · medium
+`design` · medium · **fixed in WWCP_POI 2e27241: charging station, pool and operator, parking operator and grid operator get the createdAt of a change set changing what they embed**
 
 - **Where:** `RoamingNetwork.InfrastructureChanges.cs:318,351,360-367`; `RoamingNetwork.ParkingChanges.cs:272,303`;
   `RoamingNetwork.ChangeSets.cs:591,622`.
@@ -200,7 +200,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
   boundaries.
 
 ### 17. Status types accept any text, and nothing aggregates them
-`design` · medium · repository: WWCP_POI (WWCP_POI2)
+`design` · medium · repository: WWCP_POI (WWCP_POI2) · **reframed: accepting any text is intended (future values); open is only a status of groups calculated by a delegate, design proposed**
 
 - **Where:** e.g. `WWCP_POI2/.../EVSE/AdminStatus/EVSEAdminStatusType.cs:146-160` (any trimmed non-empty
   text; the same in all `*StatusType`s).
@@ -209,7 +209,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 - **Fix:** validate against the predefined values (or flag unknown ones), and add an aggregation helper.
 
 ### 18. Charging station `maxPower` and `modelId` are not checked
-`design` · medium
+`design` · medium · **fixed in WWCP_POI cf9a40b, WWCP_DatexII 6c6d9ce: maxPower at most that of its EVSEs together (DATEX II importer leaves an exceeding one out), docs corrected; modelId stays free text, certificates name their model as ChargingStationModel_Id**
 
 - **Where:** `ChargingStation.cs:173,242,580`; `WWCP_POI2/.../ChargingStationModel_Id.cs:157-170`;
   `ChargingStationManufacturer.cs`, `EnergyMeterManufacturer.cs` (no model lists).
@@ -262,7 +262,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 - **Fix:** accept names only (`Enum.GetNames<TEnum>().Contains(text, StringComparer.Ordinal)`).
 
 ### 24. Grid connection points and parking products drop `created`/`lastChange`
-`design` · low
+`design` · low · **fixed in WWCP_POI 1ec819d: brands, grid connection points and parking products refuse created and lastChange**
 
 - **Where:** `GridConnectionPoint.cs:365-368`, `ParkingProduct.cs:181-184` (`out _, out _`).
 - **Impact:** the timestamps are read, validated and dropped silently, so the given document does not
@@ -270,7 +270,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 - **Fix:** refuse them on these types, or keep them.
 
 ### 25. Dead code in `ChargingStationOperator` and the delegates
-`cleanup` · low
+`cleanup` · low · **fixed in WWCP_POI addd1e2**
 
 - `DefaultMaxChargingStationOperator(Admin)StatusScheduleSize = 15` (`ChargingStationOperator.cs:246,251`):
   the constructor defaults to the base value of 50, so 15 only applies when `null` is passed explicitly
