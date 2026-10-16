@@ -369,7 +369,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 
 
 ### 34. Base64 ETags are read, but written again as hex: signatures over them do not verify
-`bug` · low · found in the review of 2026-10-16
+`bug` · low · found in the review of 2026-10-16 · **fixed in WWCP_POI 69ef28f: change sets and commits refuse ETags not written in hex (`ETag.ParseHex`); SPECIFICATION section 3.1 says so**
 
 - **Where:** `WWCP_POI3/ChangeSet/ETag/ETag.cs:224-231, 410-418` (base64 read) and `:434-440`, `ToJSON` writing hex by
   default; `RoamingNetworkPrecondition.cs:63, 89`; `RoamingNetworkChangeSet.cs:760-761`;
@@ -382,7 +382,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 
 
 ### 35. `ReplaceElement` of a single value may change its identification
-`bug` · low · found in the review of 2026-10-16
+`bug` · low · found in the review of 2026-10-16 · **fixed in WWCP_POI 69ef28f: one identified object keeps its identification**
 
 - **Where:** `WWCP_POI3/ChangeSet/POIElements.cs:388-401`: only the branch of an array checks
   `SameId(…, IdOf(replacement), last.ElementId)`; a single value is replaced as it is.
@@ -393,7 +393,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 
 
 ### 36. `AddElement` with an `elementId` makes an absent single value an array of one
-`bug` · low · found in the review of 2026-10-16
+`bug` · low · found in the review of 2026-10-16 · **fixed in WWCP_POI 69ef28f: an absent `energyMeter` is set, not made an array of one**
 
 - **Where:** `WWCP_POI3/ChangeSet/POIElements.cs:323-333`.
 - **Problem:** `AddElement` of `[energyMeter@"M1"]` to an EVSE without an energy meter writes `energyMeter: [ {…} ]`;
@@ -403,7 +403,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 
 
 ### 37. Search: `limit=0` links to itself as the next page
-`bug` · low · found in the review of 2026-10-16
+`bug` · low · found in the review of 2026-10-16 · **fixed in WWCP_POI 69ef28f: `limit=0` is refused, the previous page of a huge limit is the first**
 
 - **Where:** `WWCP_POI3/API/POI_API.Query.cs:394-406` (`QueryResponse`).
 - **Problem:** with `limit=0`, `offset + limit < filtered.Count` holds, so `rel="next"` names the same offset: a client
