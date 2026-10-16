@@ -172,7 +172,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
   element.
 
 ### 14. Element change kinds exist but are never applied
-`design` · medium
+`design` · medium · **fixed in WWCP_POI 055fa22: element changes are applied as the change of the property they are part of, with the element as old value; merges, and so the importers' differences, merge and write arrays of identified elements element by element**
 
 - **Where:** `WWCP_POI3/ChangeSet/RoamingNetworkChange.cs:145-182,1336-1455`; every apply path ends in
   `default: … not supported yet` (`ChangeSets.cs:651,801`, `RegistryChanges.cs:339`,
