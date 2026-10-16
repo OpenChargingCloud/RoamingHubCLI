@@ -328,7 +328,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 
 
 ### 31. A precondition holds only for the version a change set was made for, not for the head it is merged into
-`bug` · high · found in the review of 2026-10-16
+`bug` · high · found in the review of 2026-10-16 · **fixed in WWCP_POI 4b3e562: `Commit` refuses a change set for an older version whose preconditions a tip broke; merging tips conflict (`Precondition`) where the other tip changed an entity a change set names**
 
 - **Where:** `WWCP_POI3/History/RoamingNetworkHistory.cs:635-652` (`Commit`), `RoamingNetworkHistory.Persistence.cs:622-656`
   (`FindVersionFor`), `RoamingNetworkHistory.cs:1093-1144` (`MergeTips`), `RoamingNetwork.Merge.cs:349-355` (the merge
@@ -345,7 +345,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 
 
 ### 32. Preconditions are not limited, and each one hashes its whole entity again
-`bug` · medium · found in the review of 2026-10-16
+`bug` · medium · found in the review of 2026-10-16 · **fixed in WWCP_POI 4b3e562: `MaxPreconditions` (1,000); ETags once per entity, format and hash algorithm**
 
 - **Where:** `WWCP_POI3/ChangeSet/RoamingNetworkChangeSet.cs:605-632` (reading `preconditions`),
   `RoamingNetworkChangeSetLimits.cs:33-48`, `RoamingNetwork.Preconditions.cs:109-126`, `RoamingNetwork.ChangeSets.cs:262-294`.
@@ -358,7 +358,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 
 
 ### 33. Docs: the ETag a precondition names is that of `?view=stored`, not the HTTP ETag served by default
-`docs` · low · found in the review of 2026-10-16
+`docs` · low · found in the review of 2026-10-16 · **fixed in WWCP_POI 4b3e562: SPECIFICATION section 4 and the remarks name `?view=stored`**
 
 - **Where:** `SPECIFICATION.md` section 4 ("the HTTP `ETag` an entity is served with") and section 7, the remarks of
   `WWCP_POI3/RoamingNetwork/RoamingNetwork.Preconditions.cs:36-38`; `POI_API.Entities.cs` serves charging pools,
