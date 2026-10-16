@@ -327,6 +327,102 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 - **Fix:** the party is named as its keys name it; `IsThisRoamingNetwork` compares roaming network identifications typed.
 
 
+### 31. A precondition holds only for the version a change set was made for, not for the head it is merged into
+`bug` · high · found in the review of 2026-10-16
+
+- **Where:** `WWCP_POI3/History/RoamingNetworkHistory.cs:635-652` (`Commit`), `RoamingNetworkHistory.Persistence.cs:622-656`
+  (`FindVersionFor`), `RoamingNetworkHistory.cs:1093-1144` (`MergeTips`), `RoamingNetwork.Merge.cs:349-355` (the merge
+  change set has no preconditions); the same for `TryAppend` of a peer's commit whose parent is an older version.
+- **Problem:** a client reads the charging pool P at version V1 and makes a change set for V1 with
+  `Precondition(ChargingPool, P)`. Meanwhile the head moves to V2, where P's `hotline` changed. `Commit` finds V1,
+  checks the precondition there, where it holds by construction, and `MergeTips` merges the branch with V2 property by
+  property, without a conflict. The change set lands in the head although P is no longer as the client read it, which
+  is what preconditions are for. Over POI_API (`POI_API.History.cs:525`, `POI_API.WebSocket.cs:629`) a precondition
+  therefore never refuses anything; `TryRebase` checks them, but the server never rebases.
+- **Fix:** when the parent is not the head, or other tips exist, check the preconditions also against every tip the
+  commit will be merged with, and refuse with "prepare it again for the head"; or refuse to merge a branch whose
+  preconditions do not hold in the other tip.
+
+
+### 32. Preconditions are not limited, and each one hashes its whole entity again
+`bug` · medium · found in the review of 2026-10-16
+
+- **Where:** `WWCP_POI3/ChangeSet/RoamingNetworkChangeSet.cs:605-632` (reading `preconditions`),
+  `RoamingNetworkChangeSetLimits.cs:33-48`, `RoamingNetwork.Preconditions.cs:109-126`, `RoamingNetwork.ChangeSets.cs:262-294`.
+- **Problem:** the limits cover changes (10 000), signatures (16), size (16 MB) and depth, not preconditions. A change
+  set within 16 MB can name some 100 000 preconditions, e.g. all of the roaming network or of a large operator, and
+  `TryCheckPreconditions` calculates `EntityETag(entity.Full)`, the canonical JSON of the whole entity, once for each,
+  without a cache, under the lock of the history: any party that may sign a change can stall the server.
+- **Fix:** a `MaxPreconditions` limit, checked when reading a change set; within one check, an ETag calculated once per
+  entity, format and hash algorithm.
+
+
+### 33. Docs: the ETag a precondition names is that of `?view=stored`, not the HTTP ETag served by default
+`docs` · low · found in the review of 2026-10-16
+
+- **Where:** `SPECIFICATION.md` section 4 ("the HTTP `ETag` an entity is served with") and section 7, the remarks of
+  `WWCP_POI3/RoamingNetwork/RoamingNetwork.Preconditions.cs:36-38`; `POI_API.Entities.cs` serves charging pools,
+  stations and EVSEs as they are at runtime, with the properties their groups give them.
+- **Problem:** for a member that takes properties from its groups, the HTTP ETag of the default view differs from
+  `TryGetEntityETag`; a client following the specification makes a precondition that always fails as changed.
+- **Fix:** name `?view=stored` in section 4, section 7 and the remarks (docs/README.md already does).
+
+
+### 34. Base64 ETags are read, but written again as hex: signatures over them do not verify
+`bug` · low · found in the review of 2026-10-16
+
+- **Where:** `WWCP_POI3/ChangeSet/ETag/ETag.cs:224-231, 410-418` (base64 read) and `:434-440`, `ToJSON` writing hex by
+  default; `RoamingNetworkPrecondition.cs:63, 89`; `RoamingNetworkChangeSet.cs:760-761`;
+  `RoamingNetworkChangeSet.Signing.cs:241-247`; `SPECIFICATION.md:70-71`.
+- **Problem:** section 3.1 allows `base64` in a JSON ETag. A peer that writes the before, after or precondition ETags
+  of a change set in base64 and signs its canonical JSON as written has signatures that fail here, and another commit
+  identification: the ETag does not keep its encoding, and the signature input is written again with hex.
+- **Fix:** keep the encoding an ETag was read with, or state in section 4 that change sets name ETags in hex and refuse
+  others there.
+
+
+### 35. `ReplaceElement` of a single value may change its identification
+`bug` · low · found in the review of 2026-10-16
+
+- **Where:** `WWCP_POI3/ChangeSet/POIElements.cs:388-401`: only the branch of an array checks
+  `SameId(…, IdOf(replacement), last.ElementId)`; a single value is replaced as it is.
+- **Problem:** `ReplaceElement` of the EVSE's `energyMeter` (`{"@id": "M1", …}`) with `{"@id": "M2", …}` is accepted,
+  although "ReplaceElement keeps the identification" (SPECIFICATION section 4) and an `UpdateElementProperty` of `@id`
+  is refused (`:422`).
+- **Fix:** where the single value has an identification, require the replacement to have the same one.
+
+
+### 36. `AddElement` with an `elementId` makes an absent single value an array of one
+`bug` · low · found in the review of 2026-10-16
+
+- **Where:** `WWCP_POI3/ChangeSet/POIElements.cs:323-333`.
+- **Problem:** `AddElement` of `[energyMeter@"M1"]` to an EVSE without an energy meter writes `energyMeter: [ {…} ]`;
+  only reading the EVSE again refuses it, with a type error about `energyMeter` instead of a clear message.
+- **Fix:** make an array only for a property holding an array (e.g. one of `ElementIdTypes`), else set the value after
+  checking its `@id`, or refuse with a clear message.
+
+
+### 37. Search: `limit=0` links to itself as the next page
+`bug` · low · found in the review of 2026-10-16
+
+- **Where:** `WWCP_POI3/API/POI_API.Query.cs:394-406` (`QueryResponse`).
+- **Problem:** with `limit=0`, `offset + limit < filtered.Count` holds, so `rel="next"` names the same offset: a client
+  following `Link` never ends. `(Int32) Query.Limit.Value` wraps for a limit above `Int32.MaxValue`, so `rel="prev"`
+  may point forward.
+- **Fix:** refuse `limit=0` (or write no next link then), and clamp the limit before casting.
+
+
+### 38. Spec question: a conflict marker in the virtual merge base and identified arrays
+`question` · low · found in the review of 2026-10-16
+
+- **Where:** `WWCP_POI3/RoamingNetwork/RoamingNetwork.Merge.cs:662` (`TryMergeElements`); SPECIFICATION section 5.3.
+- **Problem:** where the virtual merge base holds only a conflict marker of an entity, each of its arrays counts as
+  empty: two tips keeping the entity with different identified arrays are united without a conflict, and a property
+  only one tip sets is taken. That is what "absent counting as empty" says, but not "the marker makes the tips
+  conflict unless both tips have the same".
+- **Fix:** decide which sentence holds, and make the other one say so.
+
+
 ## Checked, no issue
 
 - **Pool, station and tariff ids with a lowercase operator prefix** are fine: `ChargingStationOperator_Id`
@@ -335,6 +431,15 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
   picks the parser by the explicit entity type.
 - **`ParkingOperator.Ordered`** finds duplicates case-insensitively and orders by ordinal. Case variants
   can't coexist, so the order is still deterministic.
+- **Review of 2026-10-16** (element changes, the merge by typed identifications, preconditions and ETags, groups giving
+  their members properties): element changes are owned and checked as the change of the property they are part of;
+  identifications compare alike in `KeyOf`, `SameId`, `TryMerge`, `Diff` and `MergeKey`; `Diff` checks itself by
+  replaying its changes; preconditions are signed, part of the commit identification and kept and checked by
+  `TryRebase`, `TryApplyKnown` and `TryAppend`; the entity ETag is the one of `POIRepresentation.Of`, in JSON and CBOR;
+  every property groups give round-trips and is taken by their members, effective members share the runtime status of
+  their members across versions. Two findings in the then new effective members were fixed with them: a member that
+  left its group, or lost a value of it, kept an older last change; identifications in another spelling given by two
+  groups of the same priority were refused as different.
 - **Change order within a change set** matters, because the operator is re-parsed after each change: a
   group must stop naming an EVSE before the EVSE is removed. This is documented in the docs and needs no
   issue.
