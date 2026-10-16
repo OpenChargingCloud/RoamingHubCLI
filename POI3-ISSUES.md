@@ -299,7 +299,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
   also handles space groups and products (`RoamingNetwork.cs:1645-1646`, `ParkingChanges.cs:121-125`).
 
 ### 28. No common policy for identifications
-`design` · low · **deferred 2026-10-14**: eMI3/ISO 15118 identifications stay as the standard defines them; open is only one rule for the free-text identifications (proposal: exact and ordinal, refusing surrounding whitespace and control characters) · **2026-10-16: transparency software and certificate identifications compare as brands do, WWCP_POI e012acd; open are only the separators**
+`design` · low · **resolved 2026-10-16, WWCP_POI e012acd, 49310b2: the separators are intended (grid operators have no market format and write `*`, e-mobility providers keep the market's spelling, both compare without it); merges find entities by their typed identifications** · **deferred 2026-10-14**: eMI3/ISO 15118 identifications stay as the standard defines them; open is only one rule for the free-text identifications (proposal: exact and ordinal, refusing surrounding whitespace and control characters) · **2026-10-16: transparency software and certificate identifications compare as brands do, WWCP_POI e012acd; open are only the separators**
 
 - Case-insensitive and trimmed: `Brand_Id`, `EnergyMeterManufacturer_Id`, `RoamingNetwork_Id`,
   `DataLicense_Id`, and since WWCP_POI e012acd `TransparencySoftware_Id`, `TransparencySoftwareCertificate_Id`.
