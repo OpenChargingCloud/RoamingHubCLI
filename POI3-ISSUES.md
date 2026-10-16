@@ -182,7 +182,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 - **Fix:** implement them, or mark them reserved or obsolete in the API and the README.
 
 ### 15. `RoamingNetworkChange.Add(operator)` can't add an operator that has children
-`design` · medium
+`design` · medium · **fixed in WWCP_POI 0a7fb94: `Add` leaves the children of charging station, parking and grid operators out; `AddChildren(…)` gives the changes their owners sign to add them**
 
 - **Where:** `RoamingNetworkChange.cs:231-235` (`ToEmbeddedJSON()`), `:560-564` (`ToJSON()` of a parking
   operator); `RoamingNetwork.Ownership.cs:470-474`.
@@ -191,7 +191,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 - **Fix:** strip the child arrays in the helpers, or throw early with a clear message.
 
 ### 16. `TryParse` neither checks `eTags` nor `@context`
-`design` · medium
+`design` · medium · **fixed in WWCP_POI fdf4e69, WWCP_DatexII ab619e2, WWCP_OCPI d80a7a88: declared `eTags` must be those of the network read, a declared `@context` the own one (also of an operator); the importers read changed JSON without the head's ETags**
 
 - **Where:** `RoamingNetwork.cs:531ff` (JSON), `:1049ff` (CBOR); `ValidateETags` is only called in tests.
 - **Impact:** wrong or stale `eTags` and a foreign `@context` are accepted silently, unless the caller
