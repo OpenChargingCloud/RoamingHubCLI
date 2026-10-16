@@ -413,7 +413,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 
 
 ### 38. Spec question: a conflict marker in the virtual merge base and identified arrays
-`question` · low · found in the review of 2026-10-16
+`question` · low · found in the review of 2026-10-16 · **resolved in WWCP_POI a30a484: the marker holds, an entity that is a conflict marker as a whole conflicts as a whole unless both tips have it the same**
 
 - **Where:** `WWCP_POI3/RoamingNetwork/RoamingNetwork.Merge.cs:662` (`TryMergeElements`); SPECIFICATION section 5.3.
 - **Problem:** where the virtual merge base holds only a conflict marker of an entity, each of its arrays counts as
