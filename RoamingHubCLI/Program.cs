@@ -183,7 +183,8 @@ namespace cloud.charging.open.RoamingHub.CLI
                                                                  (hub.TrafficDirectory is not null
                                                                       ? $"in memory, and all of them appended to {hub.TrafficDirectory}, "
                                                                       : "in memory only, ") +
-                                                                 (hub.OCPI.Logging?.Payloads == true ? "bodies and all" : "without the bodies"))
+                                                                 (hub.OCPI.Logging?.Payloads == true ? "bodies and all" : "without the bodies")),
+                                             .. hub.DatexIIBannerLines()
                                          ]))
                     Console.WriteLine(line);
 
