@@ -66,7 +66,11 @@ namespace cloud.charging.open.RoamingHub.CLI
                                 "effect at once. Who this hub is in OCPI is read once, at the start, and deliberately not " +
                                 "changeable while running: it is what every peer wrote into its credentials. The peers " +
                                $"themselves are not in the file: the OCPI library keeps them below {Hub.OCPIDirectoryName}/ " +
-                                "beside it, one set per OCPI version, and reads them back at every start.",
+                                "beside it, one set per OCPI version, and reads them back at every start. The roaming network " +
+                                "operator this hub is gets its signing key and its identity key at the first start, kept below " +
+                               $"{HubRoamingNetworkOperator.DirectoryName}/ beside the file - keep a copy of them somewhere safe; " +
+                               $"the file's \"{HubRoamingNetworkOperator.ConfigurationSection}\": {{\"@id\", \"name\"}} says who it is, " +
+                               $"read at that first start only. The roaming networks it serves are below {Hub.POIDirectoryName}/.",
 
             CertificateKinds:   Hub.CertificateKinds,
 
@@ -184,6 +188,10 @@ namespace cloud.charging.open.RoamingHub.CLI
                                                                       ? $"in memory, and all of them appended to {hub.TrafficDirectory}, "
                                                                       : "in memory only, ") +
                                                                  (hub.OCPI.Logging?.Payloads == true ? "bodies and all" : "without the bodies")),
+                                             ("RNO",             $"this hub is the roaming network operator '{hub.NetworkOperator.Id}'" +
+                                                                 (hub.NetworkOperator.IsNew ? ", made now" : "") +
+                                                                 $", its keys in {hub.NetworkOperator.Directory}; " +
+                                                                 $"{hub.POI.RoamingNetworks.Count(hub.NetworkOperator.Operates)} roaming network(s) operated"),
                                              .. hub.DatexIIBannerLines()
                                          ]))
                     Console.WriteLine(line);

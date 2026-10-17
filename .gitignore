@@ -309,3 +309,15 @@ known-servers.json
 # What went between those peers is not here and never will be: the traffic log
 # is in memory only - see libs/RoamingHub.
 /ocpi/
+
+# The roaming network operator this hub is: made at the first start beside the
+# configuration, with the private halves of its signing key and its identity
+# key. Whoever has them can sign as the operator of every roaming network this
+# hub made - and without the identity key, nobody can ever replace the keys of
+# those networks. Keep a copy somewhere safe, never in the source; anchored
+# like the accounts.
+/roamingNetworkOperator/
+
+# The histories of the roaming networks this hub serves, one directory each,
+# beside the configuration: what this installation was told, not the source.
+/poi/

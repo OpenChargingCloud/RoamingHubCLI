@@ -331,31 +331,52 @@ in a browser is the **Points of interest** page; the same URL asked for JSON is
 the list. Each network is a directory below `poi/` beside the configuration
 file, read back at every start.
 
-A new one is made with the public keys of its roaming network operator, its
-RNO, and nothing else but a name: the RNO keeps its private keys, and the hub
-holds none of them. Below the list on the **Points of interest** page, at the
-prompt, or over SSH:
+The hub is a **roaming network operator**, its RNO: at the first start it
+makes a signing key and an identity key and keeps them below
+`roamingNetworkOperator/` beside the configuration file - keep a copy of that
+directory somewhere nobody else can read it, as without the identity key
+nobody can ever replace the keys of the networks the hub operates. A fresh hub
+serves no roaming network:
 
 ```
-RoamingHub> roamingNetworks add QA signingKey pAECIAEh... identityKey pAECIAMh... identityKey pAECIAMh... Quality assurance
-The roaming network 'QA' was made, at revision 0, commit a975873c.... Its roaming network operator adds its parties now, with change sets it signs.
-http://127.0.0.1:2356/poi/RNs/QA
+RoamingHub> roamingNetworkOperator
+This hub is the roaming network operator 'RNO-103B0540', since 2026-10-17T13:38:51.443Z.
+  signing key   784c5f9e...  pAECIAEh...
+  identity key  103b0540...  pAECIAMh...
+  its private keys are kept in '...\roamingNetworkOperator'
+  it operates no roaming network yet: 'roamingNetworks add <id> [<name>]' makes one
 ```
 
-or `POST /api/v1/poi/roamingNetworks` with `{"@id", "name", "signingKeys",
-"identityKeys"}`, each key the Base64 of its COSE key or a key as POI writes it.
-`roamingNetworks` alone lists them, with their revisions. Making one is
-`poi:edit`, an administrator's: whoever makes a roaming network says whose keys
-rule it. Give it two identity keys with different validities, one of them kept
-offline - nobody can replace them once they are lost.
+Its identification is `RNO-` and eight hex digits of its identity key, unless
+the configuration file says `"roamingNetworkOperator": {"@id": "GraphDefined",
+"name": "GraphDefined GmbH"}` before the first start. A new roaming network is
+made with nothing but a name, operated by the hub; then the hub adds its first
+charging station operator, with the public halves of the operator's keys - the
+operator keeps the private ones. Below the list on the **Points of interest**
+page, at the prompt, or over SSH:
 
-Everything else in it comes as change sets its owners sign - the RNO adds a
-charging station operator with its keys, the operator adds its charging pools -
-submitted by anybody to `COMMIT /poi/RNs/{id}/history/changeSets` or over the
-network's WebSocket: what a change set may change is for its signatures to say,
-not for who sent it. Every commit is in the log, tagged `poi` and `commit`.
+```
+RoamingHub> roamingNetworks add QA Quality assurance
+The roaming network 'QA' was made, at revision 0, commit 4d99ddd0..., operated by this hub, 'RNO-103B0540'. Its parties are added now, with change sets this hub signs.
+RoamingHub> roamingNetworks QA add chargingStationOperator DE*QAC signingKey pAECIAEh... identityKey pAECIAMh... QA Charging
+The ChargingStationOperator 'DE*QAC' was added to the roaming network 'QA', at revision 1, commit d403e4d9.... It adds its data now, with change sets it signs.
+```
+
+or `POST /api/v1/poi/roamingNetworks` with `{"@id", "name"}` and
+`POST /api/v1/poi/roamingNetworks/QA/chargingStationOperators` with `{"@id",
+"name", "signingKeys", "identityKeys"}`, each key the Base64 of its COSE key or
+a key as POI writes it. `roamingNetworks` alone lists them, with their
+revisions, `roamingNetworks QA` one with its parties and their keys. Both are
+`poi:edit`, an administrator's, and signed by the hub; so is every commit the
+hub makes of a network it operates.
+
+Everything else in it comes as change sets its owners sign - the operator adds
+its charging pools - submitted by anybody to
+`COMMIT /poi/RNs/{id}/history/changeSets` or over the network's WebSocket: what
+a change set may change is for its signatures to say, not for who sent it.
+Every commit is in the log, tagged `poi` and `commit`.
 [libs/WWCP_POI/examples/example1.md](libs/WWCP_POI/examples/example1.md) goes
-through it step by step.
+through it step by step, from the first start on.
 
 
 ### Who may do what
