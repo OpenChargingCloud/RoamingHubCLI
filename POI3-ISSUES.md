@@ -423,6 +423,57 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 - **Fix:** decide which sentence holds, and make the other one say so.
 
 
+### 39. A commit read from text is refused where an old value is a whole number
+`bug` · high · found while writing `examples/example1.md` (2026-10-17) · **fixed in WWCP_POI f67983e: old values are compared as their canonical JSON (`POIJSON.SameContent`), and refusals say the value as its canonical JSON**
+
+- **Where:** `WWCP_POI3/RoamingNetwork/RoamingNetwork.ChangeSets.cs` (`OldValueMatches`), used by every kind of change.
+- **Problem:** the old value was compared with `JToken.DeepEquals`, which takes numbers of different JSON types for
+  different values and decimals by their values. A change set read from canonical JSON - as `TryAppend` reads the
+  commits of another server from the WebSocket or HTTP - has the old value `22000` as an integer, the model writes its
+  decimal; they never matched: "the property 'maxPower' … is no longer the expected old value, but '22000.0'!".
+  The same refused `UpdateProperty(evse, "maxPower", 22000, …)` in C#, while `22000.0`, another content, was taken.
+- **Impact:** a server refuses every commit of another one that changes a number, e.g. the power of an EVSE, as soon
+  as the commit has travelled as text. Tests didn't catch it, as their commits travel as objects.
+- **Fix:** compare as canonical JSON: the integer 22000 is the decimal 22000, 22000.0 is not (SPECIFICATION section 4).
+  Test: `WholeNumberTests.A_merge_commit_read_as_text_is_the_merge_of_its_parents`, `An_old_value_is_compared_as_its_canonical_JSON`.
+
+
+### 40. `ToString()` of a change set, commit, snapshot or roaming network is not read back as it was
+`bug` · medium · found while writing `examples/example1.md` (2026-10-17) · **fixed in WWCP_POI f67983e, WWCP_DatexII d2f3469, WWCP_OCPI 848d299d: every writer of an entity writes a decimal without decimal places as an integer (`POIJSON.Number`), a change set and a snapshot also what they are given (`POIJSON.WholeNumbersAsIntegers`)**
+
+- **Where:** every `ToJSON` of an entity, `RoamingNetwork.ToJSON`, `RoamingNetworkChangeSet.ToJSON` (and so
+  `RoamingNetworkCommit.ToJSON`), `RoamingNetworkHistory.ToSnapshotJSON`.
+- **Problem:** Newtonsoft writes the decimal 11000 as `11000.0`, which a reader takes for a decimal with one decimal
+  place. A change set sent to `COMMIT …/history/changeSets` as `ToJSON().ToString()` was refused: "Signature 0 by the
+  key … is invalid"; a commit read so had another identification, a snapshot and a roaming network other ETags.
+  `CanonicalJSON.Serialize` worked, but nothing said so where it mattered.
+- **Fix:** integers for whole numbers, as canonical JSON and CBOR write them anyway: ETags, signatures and
+  identifications are unchanged. At every writer, not only where the JSON leaves: written as integers in
+  `RoamingNetwork.ToJSON()` alone, the DATEX II importer committed a change of every tariff on a round trip
+  (`ARoundTripCommitsNothing`), as it compares JSON of the roaming network with JSON of the entities by
+  `JToken.DeepEquals`, which takes the integer 19 and the decimal 19 for different values. Now all of it is alike, and
+  the JSON of an entity is the JSON read again from its text. Tests: `WholeNumberTests`; and `TestParties` holds the
+  JSON of every network a test makes a change set of to whole numbers as integers, naming the path of one that is not.
+- **Found with it:** the round trips through the adapters change the decimal places of numbers: DATEX II gives 6.0 for
+  the price 6 (a price per minute times 60); the OCPI 2.3.0 round trip of a tariff, too, no longer gave the same JSON
+  to `JToken.DeepEquals` (where its decimal places change was not looked into). As long as every number was a decimal,
+  `JToken.DeepEquals` compared them by value and hid it; with integers it took 6 and 6.0 for different, and the
+  DATEX II importer committed them. So every comparison of POI3 asking whether something changed - `POIElements`,
+  the merge, groups, preconditions in a merge, `Equals` of keys, connectors and authentication modes - now compares
+  numbers by value (`POIJSON.SameValue`), as before, deliberately; the old values (#39) and a merge commit with the
+  merge of its parents are compared exactly.
+  The adapter tests comparing a tariff before and after a round trip compare by value as well
+  (`TestParties.SameByValue`), in WWCP_OCPI and WWCP_DatexII.
+
+
+### 41. RoamingHub: the page of a roaming network asks its lists for no entry, which #37 refuses
+`bug` · medium · repository `RoamingHub` · found while writing `examples/example1.md` (2026-10-17) · **fixed in RoamingHub 87ebde5: it asks for one entry, the least the API answers; the counts come from `X-Total-Count` either way**
+
+- **Where:** `RoamingHub/Frontend/src/pages/poiEntities.ts` (the page of a roaming network).
+- **Problem:** since WWCP_POI 69ef28f (#37) the POI API refuses `limit=0`, with which the page asked every list how many
+  it holds: "The roaming network could not be loaded: Invalid limit '0': it must be at least 1!", for every network.
+
+
 ## Checked, no issue
 
 - **Pool, station and tariff ids with a lowercase operator prefix** are fine: `ChargingStationOperator_Id`

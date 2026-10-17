@@ -322,14 +322,50 @@ part of `configuration:read`: the configuration is what this hub is, and the
 traffic is what its peers did through it.
 
 
+### The points of interest
+
+The hub serves roaming networks of [POI 3](libs/WWCP_POI) below `/poi`: their
+charging station operators with their charging pools, stations and EVSEs, to
+query and to synchronise, readable by everybody without signing in. `/poi/RNs`
+in a browser is the **Points of interest** page; the same URL asked for JSON is
+the list. Each network is a directory below `poi/` beside the configuration
+file, read back at every start.
+
+A new one is made with the public keys of its roaming network operator, its
+RNO, and nothing else but a name: the RNO keeps its private keys, and the hub
+holds none of them. Below the list on the **Points of interest** page, at the
+prompt, or over SSH:
+
+```
+RoamingHub> roamingNetworks add QA signingKey pAECIAEh... identityKey pAECIAMh... identityKey pAECIAMh... Quality assurance
+The roaming network 'QA' was made, at revision 0, commit a975873c.... Its roaming network operator adds its parties now, with change sets it signs.
+http://127.0.0.1:2356/poi/RNs/QA
+```
+
+or `POST /api/v1/poi/roamingNetworks` with `{"@id", "name", "signingKeys",
+"identityKeys"}`, each key the Base64 of its COSE key or a key as POI writes it.
+`roamingNetworks` alone lists them, with their revisions. Making one is
+`poi:edit`, an administrator's: whoever makes a roaming network says whose keys
+rule it. Give it two identity keys with different validities, one of them kept
+offline - nobody can replace them once they are lost.
+
+Everything else in it comes as change sets its owners sign - the RNO adds a
+charging station operator with its keys, the operator adds its charging pools -
+submitted by anybody to `COMMIT /poi/RNs/{id}/history/changeSets` or over the
+network's WebSocket: what a change set may change is for its signatures to say,
+not for who sent it. Every commit is in the log, tagged `poi` and `commit`.
+[libs/WWCP_POI/examples/example1.md](libs/WWCP_POI/examples/example1.md) goes
+through it step by step.
+
+
 ### Who may do what
 
 Three roles, and the accounts' groups are what gives them: `viewer` may look
 at the hub and at who is on it and do nothing, and may not read the traffic;
 `hub` runs it from day to day - the name servers and the time servers, and the
 traffic; `systemadmin` may do everything, and is the only one who lets a peer
-in or changes what the hub believes, and nothing but the hub says what it may
-do. The `roles` section of `configuration.json` adds roles, or says
+in, changes what the hub believes or makes a roaming network, and nothing but
+the hub says what it may do. The `roles` section of `configuration.json` adds roles, or says
 differently what `viewer` or `hub` may do:
 
 ```json
@@ -389,6 +425,7 @@ server is held to none.
 | `libs/RoamingHub/RoamingHubTests/` | what a hub does when a peer, or a stranger, talks to it |
 | `libs/WWCP_Node/` | what the hub is before it is a hub: the log, the configuration file, name resolution and the time, the certificate store, the accounts and their roles, and the web server |
 | `libs/WWCP_OCPI/` | the protocol: OCPI 2.2.1 and 2.3.0 |
+| `libs/WWCP_POI/` | the points of interest: POI 3, its roaming networks, their change sets, history and sync |
 
 The command line is this program's vocabulary and nothing else - the switches
 at a start and the commands at the prompt. What a roaming hub *is*, and what
