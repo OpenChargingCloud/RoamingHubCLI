@@ -511,7 +511,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 
 
 ### 45. A charging station moved to another pool keeps the last change of its EVSEs, though their tariff changes
-`bug` · low · repository `WWCP_POI` · found in the review of 2026-10-17
+`bug` · low · repository `WWCP_POI` · found in the review of 2026-10-17 · **fixed in WWCP_POI d6b7b42: a change set is compared with the version before it as a whole; what it removed and added again takes its runtime status from that version (it lost it, too) and is compared with it as it is effective (test: `EffectiveLastChangeTests.A_station_moved_to_another_pool_changes_the_last_change_of_its_EVSEs_and_keeps_their_status`)**
 
 - **Where:** `WWCP_POI3/RoamingNetwork/ChargingStationOperator/ChargingStationOperator.Effective.cs`,
   `StampChangedEffective(Previous)`, together with `RoamingNetwork.InfrastructureChanges.cs` (`Add` stamps only the
@@ -526,7 +526,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 
 
 ### 46. The floors of effective last changes live in memory only
-`question` · low · repository `WWCP_POI` · found in the review of 2026-10-17
+`question` · low · repository `WWCP_POI` · found in the review of 2026-10-17 · **fixed in WWCP_POI d6b7b42: the floors are part of the version, kept by snapshots and the base of a store as `effectiveLastChanges`; the version of a merge calculated again compares with both parents, as the merge did (tests: `EffectiveLastChangeTests.A_snapshot_keeps_…`, `A_compacted_store_keeps_…`)**
 
 - **Where:** `effectiveFloors` in `ChargingStationOperator.Effective.cs` and `ParkingOperator.Effective.cs`;
   `RoamingNetworkHistory.Persistence.cs` (`TryLoad`, `TryFromSnapshot`).
@@ -538,6 +538,19 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
   history, for the same ETag of the roaming network.
 - **Fix:** keep the floors with the snapshot of the base (as runtime data of it), or document that an effective last
   change never goes back only within one process.
+
+
+### 47. A charging station whose EVSEs a group names is moved to another pool only around the group
+`bug` · low · repository `WWCP_POI` · found while fixing #45 (2026-10-18)
+
+- **Where:** `WWCP_POI3/RoamingNetwork/RoamingNetwork.InfrastructureChanges.cs`: every change of a change set is
+  checked as a valid operator (`ChargingStationOperator.TryParse`) right after it is applied.
+- **Problem:** a move is a `Remove` and an `Add`. After the `Remove`, an EVSE group naming one of its EVSEs (or a
+  charging station group naming the station) names a member the operator does not have, and the change set is refused
+  ("The member … of the group … is unknown"); adding it first is refused as well, as it would exist twice. The owner
+  has to take the members out of their groups in the same change set before the `Remove`, and put them back after the
+  `Add`.
+- **Fix:** check the references of groups only after the last change of a change set, or a change kind `Move`.
 
 
 ## Checked, no issue
