@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of RoamingHub <https://github.com/OpenChargingCloud/RoamingHub>
  *
@@ -81,10 +81,12 @@ namespace cloud.charging.open.RoamingHub.CLI
                                   "envelope, how long it took - and served at /api/v1/traffic, with a stream beside it. " +
                                   "Reading it is its own permission, traffic:read, and not part of configuration:read: the " +
                                   "configuration is what this hub is, and the traffic is what its peers did through it. " +
-                                  "The hub role may read it and the viewer may not. It is in memory and nowhere else, and " +
-                                  "the bodies are left out unless the configuration file says ocpi.logging.payloads. A " +
-                                  "deployment that has to keep more should read the stream and put it where it keeps such " +
-                                  "things.",
+                                  "The hub role may read it and the viewer may not. It is in memory and nowhere else " +
+                                  "unless the configuration file says ocpi.logging.file, which appends every call to a " +
+                                  "file of its own, one per day, beside that file; the bodies are left out either way " +
+                                  "unless it says ocpi.logging.payloads. Both are off to begin with: how long a hub may " +
+                                  "keep its peers' business is a question with a different answer in every jurisdiction, " +
+                                  "and the operator answers it.",
                                   "  ", "  "),
 
                 "",
@@ -177,7 +179,10 @@ namespace cloud.charging.open.RoamingHub.CLI
                                              ("OCPI party",      $"{hub.PartyIdText} ({hub.BusinessDetails.Name})"),
                                              ("OCPI versions",   $"{hub.OCPIVersionsURL} ({String.Join(", ", hub.OCPIVersions.Select(version => version.Label))})"),
                                              ("peers",           $"{hub.RemotePartyCount} peered, {hub.RegisteredPartyCount} of them registered, in {hub.OCPIDirectory}"),
-                                             ("calls kept",      $"the last {hub.Traffic.Capacity}, in memory only, " +
+                                             ("calls kept",      $"the last {hub.Traffic.Capacity} " +
+                                                                 (hub.TrafficDirectory is not null
+                                                                      ? $"in memory, and all of them appended to {hub.TrafficDirectory}, "
+                                                                      : "in memory only, ") +
                                                                  (hub.OCPI.Logging?.Payloads == true ? "bodies and all" : "without the bodies"))
                                          ]))
                     Console.WriteLine(line);

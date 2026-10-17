@@ -147,7 +147,9 @@ either. It is [WWCP_Node](https://github.com/OpenChargingCloud/WWCP_Node)'s,
 and its README says how a chain is checked.
 
 What the peers did through the hub is in neither: the
-[traffic](#the-traffic-which-is-the-point-of-a-hub) stays in memory.
+[traffic](#the-traffic-which-is-the-point-of-a-hub) stays in memory, unless
+`ocpi.logging.file` says otherwise - then it is appended to `traffic/` beside
+the configuration as well.
 
 
 ### Typing at it
