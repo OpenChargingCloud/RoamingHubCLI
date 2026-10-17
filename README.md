@@ -370,6 +370,12 @@ revisions, `roamingNetworks QA` one with its parties and their keys. Both are
 `poi:edit`, an administrator's, and signed by the hub; so is every commit the
 hub makes of a network it operates.
 
+`roamingNetworkOperator rotate signingKey` (or `identityKey`) replaces a key of
+the hub by a new one in every roaming network it operates, each change signed
+by the key it replaces, and forgets the old one once no network names it any
+more; `roamingNetworkOperator name GraphDefined GmbH` renames it in all of
+them. Both are `poi:edit` as well.
+
 Everything else in it comes as change sets its owners sign - the operator adds
 its charging pools - submitted by anybody to
 `COMMIT /poi/RNs/{id}/history/changeSets` or over the network's WebSocket: what
