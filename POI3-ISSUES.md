@@ -474,6 +474,72 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
   it holds: "The roaming network could not be loaded: Invalid limit '0': it must be at least 1!", for every network.
 
 
+### 42. DATEX II: the status of an EVSE tells new prices of tariffs it does not take
+`bug` · medium · repository `WWCP_DatexII` · found in the review of 2026-10-17
+
+- **Where:** `WWCP_DatexII_Adapter/POI3/POI3Mapper.cs`, `EnergyRateUpdatesOf(ChargingPool, ChargingStation, EVSE)`, called
+  for every refill point of a site status.
+- **Problem:** it takes every price of `ChargingPrices.Effective(pool, station, evse)`, the price status of the EVSE,
+  else of its station, else of its pool, without asking which tariffs the EVSE takes. New prices a pool gets for its AC
+  tariff T1 are so told in the status of its DC EVSEs too, whose energy rates in the table name only T2. The OCPI 2.3.0
+  adapter filters them (`PricesOf`: by `Operator.EffectiveEVSE(EVSE).ChargingTariffIds`), so the two publishers differ,
+  and a round trip through DATEX II copies the prices of T1 onto those EVSEs.
+- **Fix:** filter by the tariffs of the effective EVSE, as OCPI does; `ToSiteStatus` then needs the operator.
+
+
+### 43. DATEX II: exceptional closings a pool's group gives wake the publisher up only with the next snapshot
+`bug` · medium-low · repository `WWCP_DatexII` · found in the review of 2026-10-17
+
+- **Where:** `WWCP_DatexII_Adapter/POI3/POI3ToDatexIIPublisher.cs`, `ScheduleOpeningChange()` and
+  `PublishOpeningChangesAsync()`.
+- **Problem:** both go through `ChargingStationOperator.ChargingPools`, the pools as they are stored, and their own
+  `OpeningTimes`, while `ToSiteStatus` and `OpeningOf` take the effective pools. A pool whose exceptional closing its
+  `ChargingPoolGroup` gives has none of its own: no wake-up at its begin or end, no delta, and its site is told
+  `TemporarilyClosed` only with the next snapshot or table publication.
+- **Fix:** `EffectiveChargingPools` in both.
+
+
+### 44. OCPI 2.3.0: a location with a REMOVED EVSE whose EVSE ID a new one reuses is not imported
+`bug` · low-medium · repository `WWCP_OCPI` · found in the review of 2026-10-17
+
+- **Where:** `WWCP_OCPIv2.3.0_Adapter/POI3/OCPIToPOI3Importer.cs`, `ImportParking(…)`: `Location.EVSEs.ToDictionary(evse =>
+  evse.EVSEId?.ToString() ?? evse.UId.ToString(), …)`.
+- **Problem:** a location keeps its EVSEs by their `uid`; their `evse_id` may repeat, e.g. where a CPO marks the old EVSE
+  `REMOVED` and a new one takes its EVSE ID. `ToDictionary` throws, the whole location is not imported, and the worker
+  tells "Importing failed". `ToPOI3` itself leaves the REMOVED one out.
+- **Fix:** leave out REMOVED EVSEs there too, and take the last of the same key instead of `ToDictionary`.
+
+
+### 45. A charging station moved to another pool keeps the last change of its EVSEs, though their tariff changes
+`bug` · low · repository `WWCP_POI` · found in the review of 2026-10-17
+
+- **Where:** `WWCP_POI3/RoamingNetwork/ChargingStationOperator/ChargingStationOperator.Effective.cs`,
+  `StampChangedEffective(Previous)`, together with `RoamingNetwork.InfrastructureChanges.cs` (`Add` stamps only the
+  entity it adds).
+- **Problem:** a move is a `Remove` and an `Add` in one change set. The EVSEs embedded in the added station keep the
+  `lastChange` the client sent; in the version between they do not exist, so `StampChangedEffective` does not compare
+  them, and no group changed. Pool P1 in a pool group with tariff A, P2 in one with tariff B, the station S with the
+  EVSE E without tariffs of its own moved from P1 to P2: E's effective tariff is B, its effective last change
+  max(its own, PG2's), possibly older than the one it had.
+- **Fix:** stamp what an `Add` embeds with the time of the change set as well, or let `StampChangedEffective` compare
+  with the version before the change set; or take the EVSEs whose station or pool changed as candidates.
+
+
+### 46. The floors of effective last changes live in memory only
+`question` · low · repository `WWCP_POI` · found in the review of 2026-10-17
+
+- **Where:** `effectiveFloors` in `ChargingStationOperator.Effective.cs` and `ParkingOperator.Effective.cs`;
+  `RoamingNetworkHistory.Persistence.cs` (`TryLoad`, `TryFromSnapshot`).
+- **Problem:** the floor a member gets when it leaves a group, or its group stops giving it a value, is neither in the
+  JSON of the roaming network nor in a snapshot. A history loaded again builds its operators by `TryParse`, which
+  calculates the effective members without floors, and replays its log only from its base onward: a member that got
+  its floor before the base (`AttachStore`, `Compact`) has its effective last change go back to max(its own, its
+  groups') after a restart, and a restarted server tells another last change than one that replayed all of the
+  history, for the same ETag of the roaming network.
+- **Fix:** keep the floors with the snapshot of the base (as runtime data of it), or document that an effective last
+  change never goes back only within one process.
+
+
 ## Checked, no issue
 
 - **Pool, station and tariff ids with a lowercase operator prefix** are fine: `ChargingStationOperator_Id`
@@ -491,6 +557,16 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
   their members across versions. Two findings in the then new effective members were fixed with them: a member that
   left its group, or lost a value of it, kept an older last change; identifications in another spelling given by two
   groups of the same priority were refused as different.
+- **Review of 2026-10-17** (the effective members again, the views of the POI API, the adapters with groups): the
+  group classes round-trip and are validated like their members, every property a group gives is taken, conflicts are
+  told by the keys of the groups' JSON, `X-Stored-ETag`, the ETag of `?view=stored` and the one a precondition names
+  are the same, also on a 304. Fixed with them, besides #42 to #46: a merge, compared with both parents one after the
+  other, dropped the floors of the first comparison and let an effective last change go back; the importers took what
+  groups give as a member's own where they compare arrays: the DATEX II importer subtracted group tariffs from an
+  EVSE's tariffs and current types (which it takes whole, not united), and matched authentication modes by all of
+  their JSON instead of their type; the OCPI 2.3.0 importer had no such keeping at all (`POIGroupMembers.KeepWhatGroupsGive`
+  now, in WWCP_POI, for both), and wrote the parking spaces a station's group gives it as its own; `?view=stored` was
+  taken silently by `~/RNs/{RN}/CPs`, which is now refused, and by lists that have no view, which now ignore it.
 - **Change order within a change set** matters, because the operator is re-parsed after each change: a
   group must stop naming an EVSE before the EVSE is removed. This is documented in the docs and needs no
   issue.
