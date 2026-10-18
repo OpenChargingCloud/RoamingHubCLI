@@ -541,7 +541,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 
 
 ### 47. A charging station whose EVSEs a group names is moved to another pool only around the group
-`bug` · low · repository `WWCP_POI` · found while fixing #45 (2026-10-18)
+`bug` · low · repository `WWCP_POI` · found while fixing #45 (2026-10-18) · **fixed in WWCP_POI 670470e: a change set checks the members of an operator's groups, the groups of its offers and its offers not overlapping after its last change; everything else is still checked after each change (test: `GroupTests.A_station_its_groups_name_is_moved_to_another_pool`)**
 
 - **Where:** `WWCP_POI3/RoamingNetwork/RoamingNetwork.InfrastructureChanges.cs`: every change of a change set is
   checked as a valid operator (`ChargingStationOperator.TryParse`) right after it is applied.
