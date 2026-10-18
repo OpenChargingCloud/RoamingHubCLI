@@ -475,7 +475,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 
 
 ### 42. DATEX II: the status of an EVSE tells new prices of tariffs it does not take
-`bug` · medium · repository `WWCP_DatexII` · found in the review of 2026-10-17
+`bug` · medium · repository `WWCP_DatexII` · found in the review of 2026-10-17 · **fixed in WWCP_DatexII cd1f21d: the energy rate updates of an EVSE are those of the tariffs it takes as it is at runtime, the energy rates of the table (test: `POI3TemplateAdapterTests.EnergyRateUpdatesAreOfTheTariffsAnEVSETakes`)**
 
 - **Where:** `WWCP_DatexII_Adapter/POI3/POI3Mapper.cs`, `EnergyRateUpdatesOf(ChargingPool, ChargingStation, EVSE)`, called
   for every refill point of a site status.
@@ -488,7 +488,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 
 
 ### 43. DATEX II: exceptional closings a pool's group gives wake the publisher up only with the next snapshot
-`bug` · medium-low · repository `WWCP_DatexII` · found in the review of 2026-10-17
+`bug` · medium-low · repository `WWCP_DatexII` · found in the review of 2026-10-17 · **fixed in WWCP_DatexII cd1f21d: the publisher wakes up for the exceptional closings and openings of the effective charging pools, also those their templates give (test: `POI3TemplateAdapterTests.ExceptionalClosingsOfATemplateArePublishedInTime`)**
 
 - **Where:** `WWCP_DatexII_Adapter/POI3/POI3ToDatexIIPublisher.cs`, `ScheduleOpeningChange()` and
   `PublishOpeningChangesAsync()`.
@@ -500,7 +500,7 @@ behaviour with a workaround; **low** covers cleanup, naming and docs.
 
 
 ### 44. OCPI 2.3.0: a location with a REMOVED EVSE whose EVSE ID a new one reuses is not imported
-`bug` · low-medium · repository `WWCP_OCPI` · found in the review of 2026-10-17
+`bug` · low-medium · repository `WWCP_OCPI` · found in the review of 2026-10-17 · **fixed in WWCP_OCPI 99ea347c, test 26d2dce8: the parking of REMOVED EVSEs is left out, of two of the same identification the last one is taken (test: `POI3TemplateAdapterTests.ARemovedEVSEMayHaveTheEVSEIdOfItsSuccessor`)**
 
 - **Where:** `WWCP_OCPIv2.3.0_Adapter/POI3/OCPIToPOI3Importer.cs`, `ImportParking(…)`: `Location.EVSEs.ToDictionary(evse =>
   evse.EVSEId?.ToString() ?? evse.UId.ToString(), …)`.
