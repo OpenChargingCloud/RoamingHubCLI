@@ -384,7 +384,8 @@ Every commit is in the log, tagged `poi` and `commit`.
 [libs/WWCP_POI/examples/example1.md](libs/WWCP_POI/examples/example1.md) goes
 through it step by step, from the first start on;
 [example2.md](libs/WWCP_POI/examples/example2.md) builds two pools of a DC and
-an AC station each, and groups the stations and the EVSEs by their current.
+an AC station each, their power and connectors from templates of their current,
+and groups the stations and the EVSEs by their current.
 
 
 ### Who may do what
