@@ -362,11 +362,12 @@ RoamingHub> roamingNetworks QA add chargingStationOperator DE*QAC signingKey pAE
 The ChargingStationOperator 'DE*QAC' was added to the roaming network 'QA', at revision 1, commit d403e4d9.... It adds its data now, with change sets it signs.
 ```
 
-or `POST /api/v1/poi/roamingNetworks` with `{"@id", "name"}` and
-`POST /api/v1/poi/roamingNetworks/QA/chargingStationOperators` with `{"@id",
-"name", "signingKeys", "identityKeys"}`, each key the Base64 of its COSE key or
-a key as POI writes it. `roamingNetworks` alone lists them, with their
-revisions, `roamingNetworks QA` one with its parties and their keys. Both are
+or `POST /api/v1/poi/RNs` with `{"@id", "name"}` and
+`POST /api/v1/poi/RNs/QA/CSOs` with `{"@id", "name", "signingKeys",
+"identityKeys"}` - below `/api/v1` the paths the POI API serves them at below
+`/poi` - each key the Base64 of its COSE key or a key as POI writes it.
+`roamingNetworks` alone lists them, with their revisions, `roamingNetworks QA`
+one with its parties and their keys. Both are
 `poi:edit`, an administrator's, and signed by the hub; so is every commit the
 hub makes of a network it operates.
 

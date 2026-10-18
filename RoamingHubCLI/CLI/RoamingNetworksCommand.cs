@@ -229,12 +229,11 @@ namespace cloud.charging.open.RoamingHub.CommandLine
             if (Words.Length < 2)
                 return [ $"Usage: {Help()}" ];
 
-            // chargingStationOperator, or chargingStationOperators as the list of a roaming network is called.
-            var entityType = RoamingHub.PartyTypes.FirstOrDefault(party => party.Key.Equals(Words[0],       StringComparison.OrdinalIgnoreCase) ||
-                                                                           party.Key.Equals(Words[0] + "s", StringComparison.OrdinalIgnoreCase)).Value;
+            // Its entity type, in the spelling of a JSON property: chargingStationOperator.
+            var entityType = RoamingHub.PartyTypes.Values.FirstOrDefault(type => PartyWord(type).Equals(Words[0], StringComparison.OrdinalIgnoreCase));
 
             if (entityType is null)
-                return [ $"A party is one of {String.Join(", ", RoamingHub.PartyTypes.Keys.Select(key => key.TrimEnd('s')))}, not '{Words[0]}'." ];
+                return [ $"A party is one of {String.Join(", ", RoamingHub.PartyTypes.Values.Select(PartyWord))}, not '{Words[0]}'." ];
 
             var signingKeys   = new JArray();
             var identityKeys  = new JArray();
@@ -283,6 +282,17 @@ namespace cloud.charging.open.RoamingHub.CommandLine
             return [ result.Message ];
 
         }
+
+        #endregion
+
+        #region (private static) PartyWord(EntityType)
+
+        /// <summary>
+        /// The word a party of the given entity type is added by: its type, spelled as a JSON property is.
+        /// </summary>
+        private static String PartyWord(String EntityType)
+
+            => Char.ToLowerInvariant(EntityType[0]) + EntityType[1..];
 
         #endregion
 
