@@ -91,9 +91,14 @@ jobs:
       #
       # Fatal, unlike the two steps further down: a red here is a real
       # regression in a combination this repository is responsible for.
+      #
+      # A test that runs for ten minutes is hung, and is ended then, with a full
+      # dump of its process beside the results: on 2026-10-20 one of WWCP_Core's
+      # ran for 49 minutes on the Windows leg, its own ten-second timeout firing
+      # that late - the whole process was out of threads, and nothing said why.
       - name: Test everything, as pinned
         timeout-minutes: 120
-        run: dotnet test RoamingHubCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}.trx" --results-directory artifacts
+        run: dotnet test RoamingHubCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --blame-hang-timeout 10m --blame-hang-dump-type full --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}.trx" --results-directory artifacts
 
       # The same start as in ci.yml, for the same reason and on the same leg.
       # Repeating it costs a minute and catches the kind of failure that only
@@ -235,6 +240,20 @@ jobs:
         with:
           name: test-results-${{ matrix.leg }}
           path: artifacts/*.trx
+
+      # What --blame-hang left of a hung test: the dump of its process and the
+      # sequence of the tests it ran. Only on a night that has one, and kept a
+      # week - a full dump is hundreds of megabytes.
+      - name: Upload hang dumps
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: hang-dumps-${{ matrix.leg }}
+          path: |
+            artifacts/**/*.dmp
+            artifacts/**/Sequence_*.xml
+          if-no-files-found: ignore
+          retention-days: 7
 
 
   # ---------------------------------------------------------------------------
