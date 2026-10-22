@@ -359,8 +359,13 @@ page, at the prompt, or over SSH:
 RoamingHub> roamingNetworks add QA Quality assurance
 The roaming network 'QA' was made, at revision 0, commit 4d99ddd0..., operated by this hub, 'RNO-103B0540'. Its parties are added now, with change sets this hub signs.
 RoamingHub> roamingNetworks QA add chargingStationOperator DE*QAC signingKey pAECIAEh... identityKey pAECIAMh... QA Charging
-The ChargingStationOperator 'DE*QAC' was added to the roaming network 'QA', at revision 1, commit d403e4d9.... It adds its data now, with change sets it signs.
+The ChargingStationOperator 'DE*QAC' is added to the roaming network 'QA' once it signed the change set '7c1e29f0...' with each of its identity keys, as the proof that it holds them: POST /poi/RNs/QA/history/changeSets/pending/7c1e29f0.../signatures. Signed by this hub, it waits until then.
+Change 0: Add of the ChargingStationOperator 'DE*QAC' needs a signature by the new identity key '62756187...' of the ChargingStationOperator 'DE*QAC', as the proof that it holds it!
 ```
+
+The operator signs the change set with its identity keys - `GET
+/poi/RNs/QA/history/changeSets/pending/{changeSetId}` gives it - and sends the
+signatures; then it is a member, and adds its data with change sets it signs.
 
 or `POST /api/v1/poi/RNs` with `{"@id", "name"}` and
 `POST /api/v1/poi/RNs/QA/CSOs` with `{"@id", "name", "signingKeys",

@@ -271,6 +271,20 @@ namespace cloud.charging.open.RoamingHub.CommandLine
 
             var result = cli.Hub.AddParty(RoamingNetworkId, entityType, json);
 
+            // Waiting for the signatures of its identity keys, as the proof that it holds them.
+            if (result.Status == RoamingNetworkPartyStatus.Pending)
+            {
+
+                cli.Hub.Log.Notice(
+                    $"{cli.Caller.Asker} asked to add the {entityType} '{Words[1]}' to the roaming network '{RoamingNetworkId}', signed by this hub, '{cli.Hub.NetworkOperator.Id}': " +
+                    $"the change set '{result.ChangeSet?.Id}' waits for the signatures of its identity keys.",
+                    cli.Caller.Tags("poi", "security")
+                );
+
+                return [ result.Message, .. result.Missing ?? [] ];
+
+            }
+
             if (!result.Success)
                 return [ $"Nothing was added: {result.Message}" ];
 
