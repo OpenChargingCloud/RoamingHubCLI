@@ -117,17 +117,33 @@ denial of service; **medium** and **low** as usual.
   as a split view and refuses on other servers.
 - **Fix:** require canonical low-S ECDSA on verification (and reject non-canonical signatures).
 
-### S12. Public, unauthenticated reads can exhaust CPU, memory and the history lock
-`security` · high · **open**
+### S12. Public, unauthenticated reads can exhaust CPU and memory, and some still hold the history lock
+`security` · high · **open** (updated 2026-10-23 with the load-test session, at WWCP_POI `c2fe6ff`)
 
-- **Where:** `WWCP_POI/WWCP_POI3/WebSocket/POIWebSocketServer.cs:684-750` (batches of up to 1000 heavy reads, no
-  cancellation), `API/POI_API.Entities.cs:2095-2187` (up to ~16,383 cached `?without=` views per operator),
-  `API/POI_API.Peers.cs:273-311` with `History/RoamingNetworkHistory.cs:1715-1736` (`have` lists unbounded, O(K·N)
-  under the lock), `History/RoamingNetworkHistory.PendingChangeSets.cs:195-209` (a read re-verifies every pending
-  signature under the lock), `API/POI_API.Query.cs:71-101` (unbounded `match`/`limit`).
-- **Problem:** several public endpoints do attacker-scaled work, some under `historyLock`, so commits and sync stall.
-- **Fix:** restrict batches to write/status actions and add a byte budget; cache snapshots and `?without=` views per
-  version with a bound; cap and deduplicate `have`; cache pending-signature verification; cap `match`/`limit`.
+- **Already done:** WWCP_POI `34ffb02` moved most readers of a history to an immutable view
+  (`History/RoamingNetworkHistory.ReadView.cs`) instead of `historyLock`: `Root`, `Count`, `Contains`,
+  `TryGetCommit`, `TryGetCommitsSince`, `HaveIds`, `TryGetMissingCommits`, the attestations, both
+  `TryGetChargingStationProof`, and the checkpoints. They no longer wait behind a running commit. Measured in
+  `WWCP_POI3_LoadTests/README.md` (Results; reports `results/loadtest-ryzen7-3700x-20261023-001737` before, at
+  `6661d2d`, and `results/loadtest-ryzen7-3700x-mvcc-20261023-030214` after; Ryzen 7 3700X, 128 GiB, .NET 10,
+  server GC): at 50k stations and 4 writers the longest wait of a `TryGetCommit` reader fell from 46.8 s to 0.41 s,
+  the total wait from 47.3 s to 2.5 s, and proof p99 from 12.5 to 5.7 ms; at 10k stations and 4 writers proof p99
+  fell from 9,250 ms to 1.3 ms. The rest is GC pauses behind merges that allocate gigabytes.
+- **Still under `historyLock`:** the `Tips` getter (`History/RoamingNetworkHistory.cs:213-217`, recalculates
+  versions via `VersionOf`), `TryGetCommitProof`, `TryGetPendingChangeSet`
+  (`History/RoamingNetworkHistory.PendingChangeSets.cs:191-213`, re-verifies every signature via
+  `TryCheckCoSigning` on each read), the `PendingChangeSets` getter, and the archive. A proof also takes the lock once
+  when it hits the window between a new head being published and its attestation (`Take`); that window lasts
+  milliseconds, but a slow `OnCommitAnnouncement` subscriber stretches it.
+- **Still attacker-scaled, without the lock:** `have` lists (`TryGetMissingCommits`,
+  `History/RoamingNetworkHistory.cs:1675-1699`) are unbounded and cost O(K·N), one `view.Ancestors` per known id
+  plus a linear filter of the commits: CPU, no longer a commit stall. WebSocket batches of up to 1000 heavy reads
+  without cancellation (`WebSocket/POIWebSocketServer.cs:684-750`), up to ~16,383 cached `?without=` views per
+  operator (`API/POI_API.Entities.cs:2095-2187`), and unbounded `match`/`limit` (`API/POI_API.Query.cs:71-101`).
+- **Fix:** move the remaining readers to the view and cache pending-signature verification; keep slow
+  `OnCommitAnnouncement` subscribers out of the publish-to-attest window; cap and deduplicate `have`; restrict
+  batches to write/status actions with a byte budget and per-item cancellation; bound the `?without=` cache; cap
+  `match`/`limit`. Not in work as of 2026-10-23.
 
 ### S13. The hub serves its web interface, API and sign-in over plain HTTP only
 `design` · high · **open**
