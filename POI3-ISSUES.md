@@ -1,585 +1,322 @@
-# POI3: issues found while documenting the entities
+# Security audit 2026-10-23
 
-Found while writing `libs/WWCP_POI/docs/` (2026-10-13) and then checked against the code (2026-10-14).
-Each entry is meant to be pasted as a GitHub issue. Paths are relative to the repository named in the
-title (`WWCP_POI` unless stated otherwise); line numbers are those of 2026-10-14.
+The open findings of a security review of RoamingHubCLI and above all WWCP_POI, asked for on 2026-10-22, at
+WWCP_POI `5832482` (super `567c2d8`). The findings already fixed (network-wide unique party keys and a co-signing
+signature limit in WWCP_POI `6661d2d`, read-only API keys in WWCP_Node `7dc7c84`, masked OCPI tokens in RoamingHub
+`07aa584`, super `cb56283`) have been taken out of this list.
 
-Severity: **high** means wrong results, crashes or data loss; **medium** means wrong or surprising
-behaviour with a workaround; **low** covers cleanup, naming and docs.
+The critical and high WWCP_POI findings were verified end to end, several by proof-of-concept tests; the
+WWCP_Node, Hermod, RoamingHub and proof/checkpoint findings were read from the code with the file and line cited
+(line numbers as of 2026-10-22). Paths name their repository. Items marked **needs a design decision** wait on the
+maintainer. Severity: **critical** means the trust model is broken; **high** means wrong results, a freeze or a
+denial of service; **medium** and **low** as usual.
+
+
+## Critical
+
+### S2. The head is the highest-revision tip, so one party can roll back everyone else
+`design` · critical · **open; needs a design decision**
+
+- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.cs:1219-1222` (tips sorted, head = `tips[0]`),
+  `:1548-1560` (`IsCanonicalOrder`, higher revision first), `:1262-1311` (conflicting tips stay);
+  the RoamingHub attests every new head (`RoamingHub/RoamingHub/RoamingHub.Attestations.cs`).
+- **Problem:** change sets may be committed onto any retained version (`FindVersionFor`,
+  `RoamingNetworkHistory.Persistence.cs:685-719`). A party makes a branch off an old version that conflicts with
+  the main line on a property it owns, then extends it with its own changes until its revision is the highest. That
+  tip becomes the head.
+- **Impact:** every other party's commits since the fork fall out of the head, and a party the RNO removed returns.
+  `GET`, the DATEX II publication, the runtime status and the RNO-signed attestations then all show the attacker's
+  version. Repeatable. Proven by PoC tests.
+- **Fix:** do not choose between conflicting tips by a revision one owner can inflate; keep the previous head's line
+  until the conflict is resolved, and/or bound how old a version a branch may fork from.
+
+### S3. A change set made for an old version is merged into the head without re-checking keys, so nothing is revoked
+`design` · critical · **open; needs a design decision**
+
+- **Where:** `WWCP_POI/WWCP_POI3/RoamingNetwork/RoamingNetwork.Ownership.cs:365-390` (ownership checked against
+  the version the change set applies to), `History/RoamingNetworkHistory.cs:772-776`, `:926-927`,
+  `RoamingNetwork.Merge.cs` (the three-way merge does no ownership check).
+- **Problem:** a change set is checked against the keys of the version it is committed to. A commit made for a
+  version before a key rotation, a certificate removal or a party removal is accepted as a branch and then merged
+  into the head, without re-checking it against the head's keys. Contradicts SPECIFICATION §8.6 ("a key is revoked
+  by removing its certificate"). The window is the whole retained history (in the hub ≥ 1000 revisions).
+- **Impact:** a leaked or withdrawn signing key, a removed RNO signing-key certificate, or a replaced compromised
+  identity key keeps working. Proven by a PoC test (removed key still changes the head).
+- **Fix:** re-verify a branch's change sets against the head's keys when merging and treat a failure as a conflict,
+  or accept change sets only for the tips / recent versions.
 
 
 ## High
 
-### 1. Change sets with nested entities without timestamps are refused (after-ETag mismatch)
-`bug` · high · **fixed in WWCP_POI e416403, WWCP_DatexII dee93dd: `created` is mandatory when reading JSON/CBOR (POIEntityMetadata), C# constructors still default it; DATEX II adapter gives new pools their creation**
+### S5. `createdAt`/`signedAt` are chosen by the signer, which neutralises `notBefore`/`notAfter`
+`design` · high · **open; needs a design decision**
 
-- **Where:** `WWCP_POI3/RoamingNetwork/RoamingNetwork.InfrastructureChanges.cs:349-351`,
-  `RoamingNetwork.ChangeSets.cs:621-622`, `WWCP_POI3/DataStructures/AImmutableInternalData.cs:41-43`.
-- **Problem:** `Add` stamps `created`/`lastChange` only on the top-level object. Nested children have no
-  timestamps when the change JSON is written by hand or by another implementation: EVSEs of an added
-  station, energy meters. They then get `Timestamp.Now` when parsed (`created ?? lastChange ?? now`).
-  The same applies to energy meters given through `UpdateProperty` of `energyMeters`, `energyMeter` or
-  `gridConnectionPoint`.
-- **Impact:** `CreateChangeSet` computes the after-ETags at T1, and `Commit` re-applies the change set at
-  T2. `MatchETags(AfterETags)` then refuses it ("The JSON ETag … differs!"). This happens on peers, and
-  also on the originating server unless both steps fall in the same millisecond. A commit that did pass
-  can no longer be recomputed when the history is loaded from disk (`TryApplyKnown`).
-  Tests don't catch it because they build changes from typed objects, which always write timestamps.
-- **Fix:** before re-parsing, stamp every nested entity object in added or updated values with
-  `created ??= lastChange ??= changeSet.CreatedAt`, or refuse entity JSON without timestamps.
+- **Where:** `WWCP_POI/WWCP_POI3/RoamingNetwork/RoamingNetwork.Ownership.cs:532` (`key.IsValidAt(ChangeSet.CreatedAt)`);
+  `createdAt` is never compared with the parent's `lastChange` or with server time; the same for price statements'
+  `signedAt` (`History/RoamingNetworkPriceStatement.cs`).
+- **Problem:** key validity is checked at a timestamp the signer writes. The holder of an expired but still-listed
+  key backdates `createdAt` into its validity; a future `createdAt` pushes `lastChange` and merge timestamps forward.
+  Proven by a PoC test.
+- **Fix:** require parent `lastChange` ≤ `createdAt` ≤ now + a small skew.
 
-### 2. `ChargingStationOperator.ToString()` throws a NullReferenceException
-`bug` · high · **fixed in WWCP_POI d272e42: the reference is removed, as versions share unchanged operators**
+### S6. The offline quorum counts holders taken from the key statement being verified
+`design` · high · **open; needs a design decision**
 
-- **Where:** `WWCP_POI3/RoamingNetwork/ChargingStationOperator/ChargingStationOperator.cs:257`
-  (property), `:729` (the only assignment, commented out), `:1606-1614` (`ToString()` ends with
-  `RoamingNetwork.Id.ToString()`).
-- **Problem:** `RoamingNetwork` is never set.
-- **Impact:** every `ToString()` on an operator throws: logging, string interpolation, the debugger.
-  `roamingNetworkId` is never serialized either (the guard at `:1193-1196` is always false).
-- **Fix:** make `ToString()` null-safe. Then either remove the property and its serializer branch, or set
-  it when the network adopts the operator.
+- **Where:** `WWCP_POI/WWCP_POI3/Proofs/RoamingNetworkKeyStatement.cs:621-659`,
+  `Proofs/RoamingNetworkTrustAnchor.cs` (pins only key @ids and `minConsensus`, no holder grouping).
+- **Problem:** a trust anchor pins only identity-key @ids and a number. When counting the holders that signed a key
+  statement, the holder label of each key is read from the statement itself. One company holding several pinned
+  identity keys (e.g. during the rotation overlap §4.1 recommends) can label them as different holders and reach the
+  quorum alone. Proven by a PoC against the trust-anchor path.
+- **Fix:** the trust anchor must pin the holder grouping (a new format), and the verifier must count by the pinned
+  groups and refuse a statement that relabels pinned keys.
 
-### 3. Infrastructure changes compare `@id` as raw text, not as identifications
-`bug` · high · **fixed in WWCP_POI 95d8763**: `StoredId` resolves the change's ids through the operator's typed lookups; test `InfrastructureTests.Entities_are_found_in_every_spelling_of_their_identification`
+### S7. Expiry and revocation can not be enforced by offline verifiers
+`design` · high · **open; needs a design decision**
 
-- **Where:** `WWCP_POI3/RoamingNetwork/RoamingNetwork.InfrastructureChanges.cs:417,433,449,458`
-  (`Find`: `operatorChild["@id"]?.Value<String>() == EntityId`), `:244-246` (parent check), `:327-354`
-  (Add).
-- **Problem:** `ChargingStation_Id`, `EVSE_Id`, `ChargingTariff_Id`, … are equal ignoring the case of the
-  suffix, the operator prefix form and `*` in the suffix. The change set code compares the JSON text
-  exactly instead.
-- **Impact:**
-  - A change naming `DE*GEF*Sab` for a stored `DE*GEF*SAB` is refused with "does not exist".
-    The same happens for `DEGEF*S1` vs `DE*GEF*S1` and for `S1*2` vs `S12`.
-  - Adding such a variant is appended first. It fails only on re-parse, with a misleading
-    "must not be given twice" error.
-- **Fix:** parse the id of the entity type and compare with `Equals`, or compare canonical `ToString()`
-  forms, in `Find`, the parent check and the Add check.
+- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkAttestation.cs:417-419` (`IsValidAt` has no lower bound and no
+  required `validUntil`), `Proofs/RoamingNetworkProof.cs:381-391` (keys/certificates taken from the proof),
+  `Proofs/RoamingNetworkKeyStatement.cs`, `Proofs/RoamingNetworkPriceStatement.cs`.
+- **Problem:** an attestation needs no `validUntil`, a key statement's `validUntil` has no upper bound, validity is
+  checked only at the signer-chosen `signedAt`, and a dropped certificate still verifies in an old proof. A leaked
+  old signing key plus a backdated attestation verifies against a pinned identity key. Proven by a PoC.
+- **Fix:** require a short-lived `validUntil` and `signedAt` ≤ verification time; require keys and certifying
+  identity keys valid at verification time; add an offline revocation horizon.
 
-### 4. Parking changes: ownership is matched by exact text; products can hit the wrong entity
-`bug` · high · **fixed in WWCP_POI 95d8763**: `ParkingStoredId`/`ParkingId` in apply and ownership; test `ParkingTests.Parking_is_found_in_every_spelling_of_its_identification`
+### S9. A party can make a conflicting branch the head to roll back and resurrect data (DoS of consensus)
+`security` · high · **open; needs a design decision (shares the root of S2/S3)**
 
-- **Where:** `WWCP_POI3/RoamingNetwork/RoamingNetwork.Ownership.cs:396,400,427-435` (exact string
-  match); `RoamingNetwork.ParkingChanges.cs:162-169,219` (typed ids, `OrdinalIgnoreCase`);
-  `WWCP_POI2/RoamingNetwork/ParkingOperator/ParkingProduct/ParkingProduct_Id.cs:347,360` (Ordinal).
-- **Problem:** Ownership is checked first, by exact string. Applying the change compares
-  case-insensitively. Parking product ids are case-sensitive, but the JSON child is found with
-  `OrdinalIgnoreCase`.
-- **Impact:**
-  - A case variant of a garage, space, sensor or group id fails with "belongs to no parking operator".
-  - With products `ABC` and `abc`, a change to `abc` edits or removes `ABC`.
-- **Fix:** use the typed `TryGet…` lookups in ownership, and match by typed-id `Equals` in
-  ParkingChanges (Ordinal for products).
+- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.cs:796,954,1016,1275-1283` (every tip pair retried on
+  each commit), `:1462-1486`, `Persistence.cs:414-426` (merge base O(N²)).
+- **Problem:** nothing bounds the number of conflicting tips. A party commits many mutually conflicting tips off one
+  old version. Every later commit or push then runs O(T²) failing three-way merges, each O(N²), under `historyLock`,
+  and a branch forked at the root stops compaction for good.
+- **Fix:** cap branches per party and by age, cache pair results until a tip changes, compute merge bases
+  incrementally.
 
-### 5. The RNO alone can remove an operator together with all its data
-`design` · high · **resolved as decided in WWCP_POI 07ff97a: intended and documented, the RNO decides who is a member**
+### S10. The peer trusts a snapshot by a name check only, so a server can replace or roll back its history
+`design` · high · **open (affects library users of `RoamingNetworkPeer`; the hub does not run a peer)**
 
-- **Where:** `WWCP_POI3/RoamingNetwork/RoamingNetwork.Ownership.cs:323` (Add/Remove of a party: owner
-  is the RNO only), `:457` (children check only for Add); `RoamingNetwork.ChangeSets.cs:639-647`;
-  `RoamingNetwork.RegistryChanges.cs:334-335`.
-- **Problem:** Removing a charging station operator or parking operator drops all its pools, stations,
-  EVSEs, tariffs and groups, or all its parking data. The RNO's signature is enough. Adding requires the
-  operator to come without children, but removing has no such check.
-- **Impact:** the RNO can delete operator-owned data that it could never add or change itself. This
-  contradicts "a charging station operator changes only its own data".
-- **Fix:** refuse a party `Remove` while it still has children (mirroring `Add`), or also require the
-  party's own signature.
+- **Where:** `WWCP_POI/WWCP_POI3/Sync/RoamingNetworkPeer.cs:943-952` (trust = "a trusted key id appears in the
+  snapshot", no signature), `:878-882`, `History/RoamingNetworkHistory.cs:497-531`,
+  `Sync/RoamingNetworkPeer.Checkpoints.cs:150-160`, `Sync/RoamingNetworkPeer.Epochs.cs:46-73`.
+- **Problem:** `TrustedRoamingNetworkOperatorKeyIds` only checks that a trusted key id is present in the snapshot
+  (public keys are public); no signature is verified. A malicious server or a MITM on `ws://` can feed a fabricated
+  network, a rolled-back snapshot (a `commits` NotFound forces a re-snapshot that overwrites the store and loses
+  unpushed local commits), or a fake next epoch.
+- **Fix:** anchor snapshots in a signature by the trusted keys (an attestation or checkpoint of that commit), require
+  descent from the current head before replacing a history, never downgrade silently, and fail closed when a verifier
+  is configured.
 
-### 6. A network without keys is frozen for good; the network's keys can't be recovered
-`design` · high · **resolved as decided in WWCP_POI c0a897d**: no constraint in code; signing keys are now rotated by the signing keys they replace or by an identity key, identity keys only by an identity key. README, SPECIFICATION and docs advise at least two RNO identity keys with different `notAfter`.
+### S11. ECDSA signatures are not required to be low-S (malleable)
+`security` · high · **open**
 
-- **Where:** `WWCP_POI3/DataStructures/POIPartyKeys.cs:84-98,121-131` (no count check);
-  `RoamingNetwork.Ownership.cs:463-468,484-489` (1..n enforced only in change sets), `:312` (network
-  keys only by RNO identity key), `:195-199,234-238`.
-- **Problem:** Constructors and `TryParse` accept parties and networks without `signingKeys`/`identityKeys`.
-  The SPECIFICATION §6 vector is an example. Such a network can't accept any change, not even one that
-  adds keys. Party keys can be recovered with an RNO identity key; the network's own keys have no
-  recovery path at all.
-- **Fix:** enforce at least one signing and one identity key in `POIPartyKeys.Check`/`TryParse` (at least
-  for the network), and design a recovery path for network keys or document that there is none.
+- **Where:** `Styx/Styx/Illias/COSE/COSEAlgorithm.cs:1376-1422` (`VerifyECDSA` accepts both S and n−S).
+- **Problem:** a third party can flip the S of a valid ECDSA signature to a second valid one. For a price statement
+  this yields a second, differently-serialised statement of the same entity and sequence, which the chain rule treats
+  as a split view and refuses on other servers.
+- **Fix:** require canonical low-S ECDSA on verification (and reject non-canonical signatures).
 
-### 7. Styx: `Address` loses its time zone on every round trip
-`bug` · high · **repository: Styx** · **fixed in Styx 80074364**: reads `timeZone`; test `Address_Tests.AnAddressKeepsItsTimeZoneWhenReadAgain`
+### S12. Public, unauthenticated reads can exhaust CPU, memory and the history lock
+`security` · high · **open**
 
-- **Where:** `Styx/Illias/Helpers/Address.cs:522` writes `"timeZone"`, `:362` reads `"TimeZone"`.
-  The lookup is case-sensitive.
-- **Impact:** the time zone of every address is dropped silently when parsed. In POI3, an in-memory
-  network has a different ETag than its parsed copy, e.g. after a snapshot sync.
-- **Fix:** read `"timeZone"`, optionally also accepting the legacy `"TimeZone"`.
+- **Where:** `WWCP_POI/WWCP_POI3/WebSocket/POIWebSocketServer.cs:684-750` (batches of up to 1000 heavy reads, no
+  cancellation), `API/POI_API.Entities.cs:2095-2187` (up to ~16,383 cached `?without=` views per operator),
+  `API/POI_API.Peers.cs:273-311` with `History/RoamingNetworkHistory.cs:1715-1736` (`have` lists unbounded, O(K·N)
+  under the lock), `History/RoamingNetworkHistory.PendingChangeSets.cs:195-209` (a read re-verifies every pending
+  signature under the lock), `API/POI_API.Query.cs:71-101` (unbounded `match`/`limit`).
+- **Problem:** several public endpoints do attacker-scaled work, some under `historyLock`, so commits and sync stall.
+- **Fix:** restrict batches to write/status actions and add a byte budget; cache snapshots and `?without=` views per
+  version with a bound; cap and deduplicate `have`; cache pending-signature verification; cap `match`/`limit`.
+
+### S13. The hub serves its web interface, API and sign-in over plain HTTP only
+`design` · high · **open**
+
+- **Where:** `RoamingHub/RoamingHub/RoamingHub.cs:273-296` (no server certificate),
+  `WWCP_Node/WWCP_Node/WWCPNode.cs:943,1019` (`UseSecureCookies` only with HTTPS),
+  `CommandLine/NodeArguments.cs:183-187` (`--any`).
+- **Problem:** with `--any` (needed for OCPI peers) the login password, Basic-auth and API-key headers, and the
+  30-day session cookie (no `Secure` flag) all cross the network in clear text.
+- **Fix:** serve the stored TLS identity with HSTS, or refuse/warn loudly when binding beyond loopback without TLS.
 
 
 ## Medium
 
-### 8. Transparency software certificates write timestamps in the wrong format
-`bug` · medium · **fixed in WWCP_POI f1b9ea8**
+### S15. A change set's @id and `rebasedFrom` are trusted, so one party can make another's change set vanish
+`security` · medium · **open**
 
-- **Where:** `WWCP_POI2/RoamingNetwork/TransparencySoftware/TransparencySoftwareCertificate.cs:288,292`
-  (`ToString("O")`).
-- **Problem:** `notBefore`/`notAfter` come out as `2026-01-01T00:00:00.0000000+00:00`, with sub-millisecond
-  precision. SPECIFICATION.md §2 requires `yyyy-MM-ddTHH:mm:ss.fffZ` for content.
-- **Impact:** the values are part of the network content and its ETags. .NET writes them
-  deterministically, but other implementations can hardly reproduce them.
-- **Fix:** `ToISO8601()`, and truncate to milliseconds in the constructor.
+- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.cs:1786-1793` (`Remember` marks every id and every
+  `metadata.rebasedFrom[].@id` committed, without comparing content), `:1805-1836`,
+  `History/RoamingNetworkHistory.PendingChangeSets.cs:486-492`.
+- **Problem:** pending change sets are public. A party commits a change set of its own whose `@id` equals a victim's,
+  or whose `rebasedFrom` lists victims' ids. The victims' change sets are then dropped and reported `committed` with
+  the attacker's commit. Proven by a PoC (the RNO's removal of a party is reported committed but never applied).
+- **Fix:** compare content before treating an id as committed or forgetting a pending change set; honour
+  `rebasedFrom` only for rebases this server verified.
 
-### 9. Grid connection point identifications are not unique
-`bug` · medium · **fixed in WWCP_POI 57f372a (by the HTTP session): grid connection points belong to their grid operators and are unique within the network**
+### S16. A charging-station-operator "subject" attestation leaves the root unattested and its role is not checked
+`bug` · medium · **open**
 
-- **Where:** no check in `RoamingNetwork.cs` (only `UnknownGridOperator`, `:1527-1539`);
-  `WWCP_POI3/API/POI_API.Entities.cs:188-194` (`FirstOrDefault`).
-- **Impact:** two pools can embed different grid connection points under the same id.
-  `GET ~/RNs/{RN_Id}/GOs/{GO_Id}/GCPs/{GCP_Id}` returns one of them and hides the other.
-- **Fix:** require ids that are unique within the network (or identical content where an id is shared),
-  or return all instances.
+- **Where:** `WWCP_POI/WWCP_POI3/Proofs/RoamingNetworkProof.cs:220-242,269-274,385-391`.
+- **Problem:** a proof verified with a CSO subject attestation (or, on the trust-anchor path, any RNO-certified key
+  with role `chargingStationOperator`) passes while the network name, the RNO, the energy-meter manufacturers and the
+  transparency software are fabricated. Root and subject attestations of different roots are counted together.
+  Proven by a PoC.
+- **Fix:** require `eTag` == root for a subject attestation or restrict `Given()` to the attested subject; the
+  trust-anchor path must require role `roamingNetworkOperator` and no subject.
 
-### 10. Charging tariff: `RemoveProperty` of `currency`/`elements` is allowed but always fails
-`bug` · medium · **fixed in WWCP_POI ea0fb05**
+### S17. Price-statement chains are keyed by raw entity text, and storage is unbounded per operator
+`bug` · medium · **open**
 
-- **Where:** `WWCP_POI3/RoamingNetwork/RoamingNetwork.InfrastructureChanges.cs:163,165`;
-  `WWCP_POI3/RoamingNetwork/ChargingTariff/ChargingTariff.cs:138,267-270,282-285`.
-- **Impact:** the removal fails with a re-parse error ("needs its currency…") instead of "can not be
-  removed".
-- **Fix:** keep a separate set of removable properties, or refuse removing mandatory properties up front.
+- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.PriceStatements.cs:586,603-613,664-667,917`,
+  `API/POI_API.PriceStatements.cs:219-237` (no authorization beyond the operator's signature).
+- **Problem:** the current statement is keyed by the raw `entityId` text, but EVSE ids compare equal ignoring `*`,
+  suffix case and whitespace. "DE*GEF*E1*1" and "DE*GEF*E11" are taken as two chains of one EVSE, so a split view
+  goes unnoticed; spellings are unlimited, so are chains and dictionary entries. One operator posting >100,000
+  statements between checkpoints evicts others' statements from the checkpoint (lost §12.4 evidence); a sequence of
+  2^64−1 ends a chain for good.
+- **Fix:** key chains by the canonical typed id and refuse a non-canonical `entityId`; per-operator quotas, no
+  cross-operator eviction, bound sequence jumps with checked arithmetic.
 
-### 11. Empty `dataLicenses` is written inconsistently
-`bug` · medium · **fixed in WWCP_POI 3c6fe8d: the operator omits empty `dataLicenses`; SPECIFICATION vectors recalculated**
+### S18. Witnesses sign checkpoints they could not check
+`bug` · medium · **open**
 
-- **Where:** `RoamingNetwork.cs:844` (omitted), `ChargingStationOperator.cs:1186-1191` with
-  `POIDataLicenses.cs:107-109` (`[]`), `ChargingPool.cs:443-444` (omitted).
-- **Impact:** the same meaning ("no licenses") has different canonical JSON and different old values in
-  change sets.
-- **Fix:** have the operator also omit empty `dataLicenses`. Note that this changes ETags.
+- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.Checkpoints.cs:424-461,870-891,212`.
+- **Problem:** a witness that joined from a checkpoint takes its first checkpoint without recomputing `commits` or
+  checking `sequence`/`previousId`, and `TryWitness` signs it. A malicious RNO can bootstrap witnesses with a
+  checkpoint whose commits tree holds a fabricated commit, which then counts as witnessed (§10.4). A first checkpoint
+  of `sequence` 2^64−1 overflows `latest.Sequence + 1`.
+- **Fix:** mark checkpoints taken unchecked and refuse to witness them; require `sequence` 0 for the first checkpoint;
+  checked arithmetic.
 
-### 12. `ChargingStationOperator.ToJSON()` writes license ids only, which don't round-trip
-`bug` · medium · **fixed in WWCP_POI ce563ab: `dataLicenses` complete by default**
+### S19. SSRF through URLs a peer supplies during the OCPI credentials handshake
+`design` · medium · **open**
 
-- **Where:** `ChargingStationOperator.cs:1151` (`ExpandDataLicenses = ShowIdOnly`), `:1187-1190`;
-  `WWCP_POI3/DataStructures/POIDataLicenses.cs:199-204`.
-- **Impact:** custom (not well-known) licenses can't be parsed back from the plain `ToJSON()`.
-  `ToEmbeddedJSON()`, the network and CBOR use the complete form.
-- **Fix:** default to `Expanded`, or write ids only for well-known licenses.
+- **Where:** `WWCP_OCPI/WWCP_OCPIv2.2.1/Common/CommonAPI.cs:3238-3311` (used by
+  `RoamingHub/RoamingHub/OCPI/OCPIv2_2_1.cs`), no filtering hook in `RoamingHub/RoamingHub/RoamingHub.OCPI.cs`.
+- **Problem:** a holder of token A (or C via a PUT) makes the hub GET `credentials.url` and the version-details URL
+  through its DNS client with the peer's `Authorization` header; loopback, private and link-local addresses are not
+  filtered, and different error texts make a port/service oracle.
+- **Fix:** refuse non-public addresses for peer-supplied URLs unless the configuration allows them, and use uniform
+  error text.
 
-### 13. Child changes don't update the operator's `lastChange`
-`design` · medium · **fixed in WWCP_POI 2e27241: charging station, pool and operator, parking operator and grid operator get the createdAt of a change set changing what they embed**
+### S20. Secrets and private keys at rest are world-readable by default; `traffic/` is not git-ignored
+`design` · medium · **open**
 
-- **Where:** `RoamingNetwork.InfrastructureChanges.cs:318,351,360-367`; `RoamingNetwork.ParkingChanges.cs:272,303`;
-  `RoamingNetwork.ChangeSets.cs:591,622`.
-- **Problem:** changing a pool, station, EVSE, tariff or group (or a parking element) sets only that
-  element's `lastChange`. The operator, the parent pool and the parent station are never touched;
-  `Remove` sets no timestamp at all.
-- **Impact:** consumers that use `lastChange` to find changes miss changes below an operator.
-- **Fix:** also set `lastChange` on the operator (and the parents), or document that `lastChange` is per
-  element.
+- **Where:** `RoamingHub/RoamingHub/RoamingHub.RoamingNetworkOperator.cs:749-771` (RNO keys unencrypted PEM, no ACL on
+  Windows, chmod after write on Unix), `WWCP_Node` accounts/certificates/logs directories beside the repository root
+  (`Protect()` returns early on Windows), session tokens and API keys stored raw, `.gitignore:309-311` (does not
+  ignore `/traffic/`).
+- **Problem:** on Windows under a drive-root folder, Authenticated Users inherit read/modify, so any local user can
+  read the RNO identity key, session tokens or TLS keys; a `git add -A` would commit `traffic/` with payload tokens
+  and CDRs.
+- **Fix:** create `accounts/`, `certificates/`, `logs/`, `ocpi/`, `traffic/` owner-only on every platform; store
+  tokens and API keys hashed; add `/traffic/` to `.gitignore`.
 
-### 14. Element change kinds exist but are never applied
-`design` · medium · **fixed in WWCP_POI 055fa22: element changes are applied as the change of the property they are part of, with the element as old value; merges, and so the importers' differences, merge and write arrays of identified elements element by element**
+### S21. Unauthenticated input is written raw into every log sink (log injection, memory growth)
+`security` · medium · **open**
 
-- **Where:** `WWCP_POI3/ChangeSet/RoamingNetworkChange.cs:145-182,1336-1455`; every apply path ends in
-  `default: … not supported yet` (`ChangeSets.cs:651,801`, `RegistryChanges.cs:339`,
-  `ParkingChanges.cs:325`, `InfrastructureChanges.cs:372`); `WWCP_POI3_Tests/ApplyChangeSetTests.cs:376-377`.
-- **Problem:** `AddElement`, `RemoveElement`, `ReplaceElement`, `UpdateElementProperty` and
-  `RemoveElementProperty` are offered by the public API but always refused.
-- **Fix:** implement them, or mark them reserved or obsolete in the API and the README.
+- **Where:** `WWCP_Node/WWCP_Node/WWCPNode.SSH.cs:752-763` with `Hermod/Hermod/SSH/Auth/UserAuthentication.cs:174`
+  (raw username/method of every failed SSH attempt), `WWCP_Node` `Logging/ConsoleLog.cs:150`, `Logging/FileLog.cs:246`
+  (no escaping); also change-set descriptions (`RoamingHub.POI.cs:283-287`) and OCPI status messages.
+- **Problem:** CR/LF forge log lines and ESC/OSC sequences reach the operator's terminal; SSH is on by default and
+  each attempt carries up to ~256 KiB, and the event log/stream buffers grow.
+- **Fix:** escape CR, LF and C0/C1 control characters and cap peer-supplied strings centrally in the log writers;
+  aggregate failed sign-in lines.
 
-### 15. `RoamingNetworkChange.Add(operator)` can't add an operator that has children
-`design` · medium · **fixed in WWCP_POI 0a7fb94: `Add` leaves the children of charging station, parking and grid operators out; `AddChildren(…)` gives the changes their owners sign to add them**
+### S22. Two password doors skip the sign-in rate limit
+`security` · medium · **open**
 
-- **Where:** `RoamingNetworkChange.cs:231-235` (`ToEmbeddedJSON()`), `:560-564` (`ToJSON()` of a parking
-  operator); `RoamingNetwork.Ownership.cs:470-474`.
-- **Impact:** both helpers send the complete representation including children, which ownership then
-  refuses.
-- **Fix:** strip the child arrays in the helpers, or throw early with a clear message.
+- **Where:** `WWCP_Node/WWCP_Node/SecureShell/NodeSSHAuthenticator.cs:130-146` (SSH `VerifyPassword` holds the global
+  `UsersSemaphore` through 600,000 PBKDF2 rounds, no per-IP/account limit), `Hermod/.../HTTPExtAPI.cs:7686-7840`
+  (legacy `SET /ext/users/{id}/password` verifies the current password with no rate limit).
+- **Problem:** when `ssh.passwords` is on, unauthenticated guesses are unthrottled and block legitimate verification
+  via the shared semaphore; the legacy route lets a cookie/API-key holder guess the current password at hash speed
+  (account takeover).
+- **Fix:** ration both doors (per IP and account), verify outside the semaphore with a dummy hash for unknown names.
 
-### 16. `TryParse` neither checks `eTags` nor `@context`
-`design` · medium · **fixed in WWCP_POI fdf4e69, WWCP_DatexII ab619e2, WWCP_OCPI d80a7a88: declared `eTags` must be those of the network read, a declared `@context` the own one (also of an operator); the importers read changed JSON without the head's ETags**
+### S23. Cross-site POST and WebSocket requests reach the mutating routes
+`design` · medium · **open**
 
-- **Where:** `RoamingNetwork.cs:531ff` (JSON), `:1049ff` (CBOR); `ValidateETags` is only called in tests.
-- **Impact:** wrong or stale `eTags` and a foreign `@context` are accepted silently, unless the caller
-  checks them itself.
-- **Fix:** check them in `TryParse` when present, or call `ValidateETags` at the import and sync
-  boundaries.
-
-### 17. Status types accept any text, and nothing aggregates them
-`design` · medium · repository: WWCP_POI (WWCP_POI2) · **reframed: accepting any text is intended (future values); open is only a status of groups calculated by a delegate, design proposed** · **fixed in WWCP_POI 03f53ad: group status set manually or calculated by a delegate (RoamingNetworkRuntimeStatus.CalculateStatus…, POIGroupStatus defaults)**
-
-- **Where:** e.g. `WWCP_POI2/.../EVSE/AdminStatus/EVSEAdminStatusType.cs:146-160` (any trimmed non-empty
-  text; the same in all `*StatusType`s).
-- **Impact:** typos become valid status values. Group, pool and station status (`PartialAvailable`) is
-  never derived from the members, so it must be set by hand and can contradict them.
-- **Fix:** validate against the predefined values (or flag unknown ones), and add an aggregation helper.
-
-### 18. Charging station `maxPower` and `modelId` are not checked
-`design` · medium · **fixed in WWCP_POI cf9a40b, WWCP_DatexII 6c6d9ce: maxPower at most that of its EVSEs together (DATEX II importer leaves an exceeding one out), docs corrected; modelId stays free text, certificates name their model as ChargingStationModel_Id**
-
-- **Where:** `ChargingStation.cs:173,242,580`; `WWCP_POI2/.../ChargingStationModel_Id.cs:157-170`;
-  `ChargingStationManufacturer.cs`, `EnergyMeterManufacturer.cs` (no model lists).
-- **Problem:** `maxPower` is documented as the power "of all its EVSEs", but it is neither computed nor
-  checked against the EVSEs. `modelId` of stations and energy meters is free text.
-- **Fix:** check `maxPower ≤ Σ EVSE.maxPower` (or derive it) or reword the docs. Add model lists to the
-  manufacturers if models are meant to be referenced.
-
-### 19. Tariff restriction accepts an empty date range
-`bug` · medium · **fixed in WWCP_POI 57b064e: `startDate` < `endDate`, `startTime` ≠ `endTime`**
-
-- **Where:** `WWCP_POI3/RoamingNetwork/ChargingTariff/ChargingTariffRestrictions.cs:141`
-  (`StartDate > EndDate`), `:59` (`endDate` is exclusive).
-- **Impact:** with `startDate == endDate` the element can never apply.
-- **Fix:** `StartDate >= EndDate`.
+- **Where:** `WWCP_POI/WWCP_POI3/API/POI_API.History.cs:461-466`, `API/POI_API.CoSigning.cs:438-442`,
+  `WebSocket` upgrade (no `AllowedOrigins`); the node's `/ext` routes parse JSON regardless of content type.
+- **Problem:** POST handlers accept any non-CBOR content type as JSON, so a "simple" cross-site POST reaches them
+  without a preflight, and the WebSocket has no Origin check. Harmless where writes need owner signatures, but real
+  CSRF/CSWSH where a deployment authenticates by cookie, Basic auth, client certificate or IP.
+- **Fix:** require `application/json`/`application/cbor` on POSTs; set `AllowedOrigins` on the WebSocket endpoints.
 
 
 ## Low
 
-### 20. README: `stepSize` is not optional
-`docs` · low · **fixed in WWCP_POI 067a0ff**
-
-- **Where:** `README.md:108-109` (`stepSize?`) vs `WWCP_POI3/RoamingNetwork/ChargingTariff/ChargingPriceComponent.cs:97-104`.
-- **Problem:** `stepSize` is required (> 0) for every type except `FLAT`, and refused for `FLAT`.
-- **Fix:** correct the README.
-
-### 21. SPECIFICATION §7 is stale; two route schemes
-`docs` · low · **fixed: §7 by the HTTP session, routes in WWCP_POI 860410b: history under ~/RNs/{RN_Id}/history**
-
-- **Where:** `SPECIFICATION.md:298` ("not served yet") vs `WWCP_POI3/API/POI_API.Entities.cs:585-590`
-  (`304 Not Modified`); `~/RNs/{id}` (entity API) vs `~/roamingNetworks/{id}/history` (history API).
-- **Fix:** update §7 (served for the entity API, not yet for the history API), and unify the route names
-  or add aliases.
-
-### 22. The network writes `"name": {}` even after the name was removed
-`bug` · low · **fixed in WWCP_POI 9b0cc8c**
-
-- **Where:** `RoamingNetwork.cs:834` (always written), `RoamingNetwork.ChangeSets.cs:770-771,1036`.
-- **Impact:** change sets treat the name as absent, but the content still has `{}`, so an old value `{}`
-  never matches.
-- **Fix:** write `name` only when it is not empty, as `description` already does. Note that this changes
-  ETags.
-
-### 23. `TryParseFlags` accepts numbers
-`bug` · low · **fixed in WWCP_POI fc33789**
-
-- **Where:** `WWCP_POI3/DataStructures/POIJSON.cs:363-365` (`Enum.TryParse`).
-- **Impact:** `currentTypes: ["4"]` is accepted and written back as `"DC"`, and so are names padded with
-  whitespace. An old value written in that form never matches.
-- **Fix:** accept names only (`Enum.GetNames<TEnum>().Contains(text, StringComparer.Ordinal)`).
-
-### 24. Grid connection points and parking products drop `created`/`lastChange`
-`design` · low · **fixed in WWCP_POI 1ec819d: brands, grid connection points and parking products refuse created and lastChange**
-
-- **Where:** `GridConnectionPoint.cs:365-368`, `ParkingProduct.cs:181-184` (`out _, out _`).
-- **Impact:** the timestamps are read, validated and dropped silently, so the given document does not
-  round-trip.
-- **Fix:** refuse them on these types, or keep them.
-
-### 25. Dead code in `ChargingStationOperator` and the delegates
-`cleanup` · low · **fixed in WWCP_POI addd1e2**
-
-- `DefaultMaxChargingStationOperator(Admin)StatusScheduleSize = 15` (`ChargingStationOperator.cs:246,251`):
-  the constructor defaults to the base value of 50, so 15 only applies when `null` is passed explicitly
-  (`:700-701,717-718`).
-- `OnDataChanged` (`:971`) and `UpdateData` (`:1061`) have no callers.
-- The `ExpandChargingTariffIds` parameter (`:1157`) is used only in commented-out code.
-- `OnRoamingNetworkDataChangedDelegate` (`RoamingNetworkDelegates.cs:36`) is never used.
-
-### 26. Status types: naming and values
-`cleanup` · low · WWCP_POI2 · **fixed in WWCP_POI 117c78d, 6707ade, WWCP_OCPI fc88efad; WWCP_DatexII 6f995b5**: file renamed, value sets per kind of entity, energy meters without EVSE values, LegalStatus camelCase and normalized when read
-
-- `ChargingStationManufacturerStatusType` lives in `ChargingStationManufacturer/Status/ChargingStationStatusType.cs:53`,
-  and its doc comments talk about charging.
-- `EnergyMeterStatusType.cs:225-242` has EVSE values (`WaitingForPlugin`, `PluggedIn`, `Charging`,
-  `DoorNotClosed`).
-- `EVSEAdminStatusType.cs:225,236` has `Deleted` and `UnknownEVSE`.
-- `ChargingPoolStatusType` (`removed`, `error`) and `ChargingPoolGroupStatusType` (`planned`,
-  `outOfService`, `faulted`, `other`) use different value sets.
-- `LegalStatus.cs:188,194,200` mixes `ForInformationOnly`/`GermanCalibrationLaw` with `verified`.
-
-### 27. Comments forget parking space groups and products
-`docs` · low · **fixed in WWCP_POI b563fc6**
-
-- `RoamingNetwork.cs:1636-1637` (`DuplicateParking`), `ParkingOperator.cs:380-381,445-446` and
-  `RoamingNetwork.ParkingChanges.cs:33,38,134` mention only garages, spaces and sensors, while the code
-  also handles space groups and products (`RoamingNetwork.cs:1645-1646`, `ParkingChanges.cs:121-125`).
-
-### 28. No common policy for identifications
-`design` · low · **resolved 2026-10-16, WWCP_POI e012acd, 49310b2: the separators are intended (grid operators have no market format and write `*`, e-mobility providers keep the market's spelling, both compare without it); merges find entities by their typed identifications** · **deferred 2026-10-14**: eMI3/ISO 15118 identifications stay as the standard defines them; open is only one rule for the free-text identifications (proposal: exact and ordinal, refusing surrounding whitespace and control characters) · **2026-10-16: transparency software and certificate identifications compare as brands do, WWCP_POI e012acd; open are only the separators**
-
-- Case-insensitive and trimmed: `Brand_Id`, `EnergyMeterManufacturer_Id`, `RoamingNetwork_Id`,
-  `DataLicense_Id`, and since WWCP_POI e012acd `TransparencySoftware_Id`, `TransparencySoftwareCertificate_Id`.
-- Separators: `GridOperator_Id` is always written with `*` (`:459-463`), while `EMobilityProvider_Id`
-  writes the separator it read (`:241-243,526-534`).
-- **Fix:** settle on one policy (case, whitespace, canonical separator) and document it in the README.
-
-### 29. Hermod: wrong name of `dl-de/zero-2-0`; context of open source licenses
-`bug` · low · **repository: Hermod** · **fixed in Hermod 79c1d6fb, WWCP_OCPI d373a2a2**
-
-- **Where:** `Hermod/HTTP/HTTPAPI/Entities/Licenses/DataLicense.cs:385-396` and `OpenSourceLicense.cs:83`.
-- **Problem:** `dl-de/zero-2-0` is named "Datenlizenz Deutschland – Namensnennung – Version 2.0", copied
-  from `by-2-0`; it should say "Zero". `OpenSourceLicense.JSONLDContext` is
-  `https://opendata.social/contexts/wwcp+json/dataLicenses`.
-- **Fix:** correct the name, and give open source licenses a context of their own (e.g. `…/openSourceLicenses`).
-
-
-### 30. Changes of parties and of the roaming network compare identifications as text
-`bug` · high · **fixed in WWCP_POI 71c4623**: owners and the network resolved through typed lookups; test `OwnershipTests.Parties_are_named_in_every_spelling_of_their_identification`
-
-- **Where:** `RoamingNetwork.Ownership.cs` (`new POIPartyId(Change.EntityType, Change.EntityId)`, `TryGetParty` for the network),
-  `RoamingNetwork.ChangeSets.cs:516,663`, `RoamingNetwork.RegistryChanges.cs:216`.
-- **Problem:** a change of the operator `degef` needed a signature by a key of the party `degef`, which no party has;
-  a change of the roaming network `RN1` or naming it as parent was not found.
-- **Fix:** the party is named as its keys name it; `IsThisRoamingNetwork` compares roaming network identifications typed.
-
-
-### 31. A precondition holds only for the version a change set was made for, not for the head it is merged into
-`bug` · high · found in the review of 2026-10-16 · **fixed in WWCP_POI 4b3e562: `Commit` refuses a change set for an older version whose preconditions a tip broke; merging tips conflict (`Precondition`) where the other tip changed an entity a change set names**
-
-- **Where:** `WWCP_POI3/History/RoamingNetworkHistory.cs:635-652` (`Commit`), `RoamingNetworkHistory.Persistence.cs:622-656`
-  (`FindVersionFor`), `RoamingNetworkHistory.cs:1093-1144` (`MergeTips`), `RoamingNetwork.Merge.cs:349-355` (the merge
-  change set has no preconditions); the same for `TryAppend` of a peer's commit whose parent is an older version.
-- **Problem:** a client reads the charging pool P at version V1 and makes a change set for V1 with
-  `Precondition(ChargingPool, P)`. Meanwhile the head moves to V2, where P's `hotline` changed. `Commit` finds V1,
-  checks the precondition there, where it holds by construction, and `MergeTips` merges the branch with V2 property by
-  property, without a conflict. The change set lands in the head although P is no longer as the client read it, which
-  is what preconditions are for. Over POI_API (`POI_API.History.cs:525`, `POI_API.WebSocket.cs:629`) a precondition
-  therefore never refuses anything; `TryRebase` checks them, but the server never rebases.
-- **Fix:** when the parent is not the head, or other tips exist, check the preconditions also against every tip the
-  commit will be merged with, and refuse with "prepare it again for the head"; or refuse to merge a branch whose
-  preconditions do not hold in the other tip.
-
-
-### 32. Preconditions are not limited, and each one hashes its whole entity again
-`bug` · medium · found in the review of 2026-10-16 · **fixed in WWCP_POI 4b3e562: `MaxPreconditions` (1,000); ETags once per entity, format and hash algorithm**
-
-- **Where:** `WWCP_POI3/ChangeSet/RoamingNetworkChangeSet.cs:605-632` (reading `preconditions`),
-  `RoamingNetworkChangeSetLimits.cs:33-48`, `RoamingNetwork.Preconditions.cs:109-126`, `RoamingNetwork.ChangeSets.cs:262-294`.
-- **Problem:** the limits cover changes (10 000), signatures (16), size (16 MB) and depth, not preconditions. A change
-  set within 16 MB can name some 100 000 preconditions, e.g. all of the roaming network or of a large operator, and
-  `TryCheckPreconditions` calculates `EntityETag(entity.Full)`, the canonical JSON of the whole entity, once for each,
-  without a cache, under the lock of the history: any party that may sign a change can stall the server.
-- **Fix:** a `MaxPreconditions` limit, checked when reading a change set; within one check, an ETag calculated once per
-  entity, format and hash algorithm.
-
-
-### 33. Docs: the ETag a precondition names is that of `?view=stored`, not the HTTP ETag served by default
-`docs` · low · found in the review of 2026-10-16 · **fixed in WWCP_POI 4b3e562: SPECIFICATION section 4 and the remarks name `?view=stored`**
-
-- **Where:** `SPECIFICATION.md` section 4 ("the HTTP `ETag` an entity is served with") and section 7, the remarks of
-  `WWCP_POI3/RoamingNetwork/RoamingNetwork.Preconditions.cs:36-38`; `POI_API.Entities.cs` serves charging pools,
-  stations and EVSEs as they are at runtime, with the properties their groups give them.
-- **Problem:** for a member that takes properties from its groups, the HTTP ETag of the default view differs from
-  `TryGetEntityETag`; a client following the specification makes a precondition that always fails as changed.
-- **Fix:** name `?view=stored` in section 4, section 7 and the remarks (docs/README.md already does).
-
-
-### 34. Base64 ETags are read, but written again as hex: signatures over them do not verify
-`bug` · low · found in the review of 2026-10-16 · **fixed in WWCP_POI 69ef28f: change sets and commits refuse ETags not written in hex (`ETag.ParseHex`); SPECIFICATION section 3.1 says so**
-
-- **Where:** `WWCP_POI3/ChangeSet/ETag/ETag.cs:224-231, 410-418` (base64 read) and `:434-440`, `ToJSON` writing hex by
-  default; `RoamingNetworkPrecondition.cs:63, 89`; `RoamingNetworkChangeSet.cs:760-761`;
-  `RoamingNetworkChangeSet.Signing.cs:241-247`; `SPECIFICATION.md:70-71`.
-- **Problem:** section 3.1 allows `base64` in a JSON ETag. A peer that writes the before, after or precondition ETags
-  of a change set in base64 and signs its canonical JSON as written has signatures that fail here, and another commit
-  identification: the ETag does not keep its encoding, and the signature input is written again with hex.
-- **Fix:** keep the encoding an ETag was read with, or state in section 4 that change sets name ETags in hex and refuse
-  others there.
-
-
-### 35. `ReplaceElement` of a single value may change its identification
-`bug` · low · found in the review of 2026-10-16 · **fixed in WWCP_POI 69ef28f: one identified object keeps its identification**
-
-- **Where:** `WWCP_POI3/ChangeSet/POIElements.cs:388-401`: only the branch of an array checks
-  `SameId(…, IdOf(replacement), last.ElementId)`; a single value is replaced as it is.
-- **Problem:** `ReplaceElement` of the EVSE's `energyMeter` (`{"@id": "M1", …}`) with `{"@id": "M2", …}` is accepted,
-  although "ReplaceElement keeps the identification" (SPECIFICATION section 4) and an `UpdateElementProperty` of `@id`
-  is refused (`:422`).
-- **Fix:** where the single value has an identification, require the replacement to have the same one.
-
-
-### 36. `AddElement` with an `elementId` makes an absent single value an array of one
-`bug` · low · found in the review of 2026-10-16 · **fixed in WWCP_POI 69ef28f: an absent `energyMeter` is set, not made an array of one**
-
-- **Where:** `WWCP_POI3/ChangeSet/POIElements.cs:323-333`.
-- **Problem:** `AddElement` of `[energyMeter@"M1"]` to an EVSE without an energy meter writes `energyMeter: [ {…} ]`;
-  only reading the EVSE again refuses it, with a type error about `energyMeter` instead of a clear message.
-- **Fix:** make an array only for a property holding an array (e.g. one of `ElementIdTypes`), else set the value after
-  checking its `@id`, or refuse with a clear message.
-
-
-### 37. Search: `limit=0` links to itself as the next page
-`bug` · low · found in the review of 2026-10-16 · **fixed in WWCP_POI 69ef28f: `limit=0` is refused, the previous page of a huge limit is the first**
-
-- **Where:** `WWCP_POI3/API/POI_API.Query.cs:394-406` (`QueryResponse`).
-- **Problem:** with `limit=0`, `offset + limit < filtered.Count` holds, so `rel="next"` names the same offset: a client
-  following `Link` never ends. `(Int32) Query.Limit.Value` wraps for a limit above `Int32.MaxValue`, so `rel="prev"`
-  may point forward.
-- **Fix:** refuse `limit=0` (or write no next link then), and clamp the limit before casting.
-
-
-### 38. Spec question: a conflict marker in the virtual merge base and identified arrays
-`question` · low · found in the review of 2026-10-16 · **resolved in WWCP_POI a30a484: the marker holds, an entity that is a conflict marker as a whole conflicts as a whole unless both tips have it the same**
-
-- **Where:** `WWCP_POI3/RoamingNetwork/RoamingNetwork.Merge.cs:662` (`TryMergeElements`); SPECIFICATION section 5.3.
-- **Problem:** where the virtual merge base holds only a conflict marker of an entity, each of its arrays counts as
-  empty: two tips keeping the entity with different identified arrays are united without a conflict, and a property
-  only one tip sets is taken. That is what "absent counting as empty" says, but not "the marker makes the tips
-  conflict unless both tips have the same".
-- **Fix:** decide which sentence holds, and make the other one say so.
-
-
-### 39. A commit read from text is refused where an old value is a whole number
-`bug` · high · found while writing `examples/example1.md` (2026-10-17) · **fixed in WWCP_POI f67983e: old values are compared as their canonical JSON (`POIJSON.SameContent`), and refusals say the value as its canonical JSON**
-
-- **Where:** `WWCP_POI3/RoamingNetwork/RoamingNetwork.ChangeSets.cs` (`OldValueMatches`), used by every kind of change.
-- **Problem:** the old value was compared with `JToken.DeepEquals`, which takes numbers of different JSON types for
-  different values and decimals by their values. A change set read from canonical JSON - as `TryAppend` reads the
-  commits of another server from the WebSocket or HTTP - has the old value `22000` as an integer, the model writes its
-  decimal; they never matched: "the property 'maxPower' … is no longer the expected old value, but '22000.0'!".
-  The same refused `UpdateProperty(evse, "maxPower", 22000, …)` in C#, while `22000.0`, another content, was taken.
-- **Impact:** a server refuses every commit of another one that changes a number, e.g. the power of an EVSE, as soon
-  as the commit has travelled as text. Tests didn't catch it, as their commits travel as objects.
-- **Fix:** compare as canonical JSON: the integer 22000 is the decimal 22000, 22000.0 is not (SPECIFICATION section 4).
-  Test: `WholeNumberTests.A_merge_commit_read_as_text_is_the_merge_of_its_parents`, `An_old_value_is_compared_as_its_canonical_JSON`.
-
-
-### 40. `ToString()` of a change set, commit, snapshot or roaming network is not read back as it was
-`bug` · medium · found while writing `examples/example1.md` (2026-10-17) · **fixed in WWCP_POI f67983e, WWCP_DatexII d2f3469, WWCP_OCPI 848d299d: every writer of an entity writes a decimal without decimal places as an integer (`POIJSON.Number`), a change set and a snapshot also what they are given (`POIJSON.WholeNumbersAsIntegers`)**
-
-- **Where:** every `ToJSON` of an entity, `RoamingNetwork.ToJSON`, `RoamingNetworkChangeSet.ToJSON` (and so
-  `RoamingNetworkCommit.ToJSON`), `RoamingNetworkHistory.ToSnapshotJSON`.
-- **Problem:** Newtonsoft writes the decimal 11000 as `11000.0`, which a reader takes for a decimal with one decimal
-  place. A change set sent to `COMMIT …/history/changeSets` as `ToJSON().ToString()` was refused: "Signature 0 by the
-  key … is invalid"; a commit read so had another identification, a snapshot and a roaming network other ETags.
-  `CanonicalJSON.Serialize` worked, but nothing said so where it mattered.
-- **Fix:** integers for whole numbers, as canonical JSON and CBOR write them anyway: ETags, signatures and
-  identifications are unchanged. At every writer, not only where the JSON leaves: written as integers in
-  `RoamingNetwork.ToJSON()` alone, the DATEX II importer committed a change of every tariff on a round trip
-  (`ARoundTripCommitsNothing`), as it compares JSON of the roaming network with JSON of the entities by
-  `JToken.DeepEquals`, which takes the integer 19 and the decimal 19 for different values. Now all of it is alike, and
-  the JSON of an entity is the JSON read again from its text. Tests: `WholeNumberTests`; and `TestParties` holds the
-  JSON of every network a test makes a change set of to whole numbers as integers, naming the path of one that is not.
-- **Found with it:** the round trips through the adapters change the decimal places of numbers: DATEX II gives 6.0 for
-  the price 6 (a price per minute times 60); the OCPI 2.3.0 round trip of a tariff, too, no longer gave the same JSON
-  to `JToken.DeepEquals` (where its decimal places change was not looked into). As long as every number was a decimal,
-  `JToken.DeepEquals` compared them by value and hid it; with integers it took 6 and 6.0 for different, and the
-  DATEX II importer committed them. So every comparison of POI3 asking whether something changed - `POIElements`,
-  the merge, groups, preconditions in a merge, `Equals` of keys, connectors and authentication modes - now compares
-  numbers by value (`POIJSON.SameValue`), as before, deliberately; the old values (#39) and a merge commit with the
-  merge of its parents are compared exactly.
-  The adapter tests comparing a tariff before and after a round trip compare by value as well
-  (`TestParties.SameByValue`), in WWCP_OCPI and WWCP_DatexII.
-
-
-### 41. RoamingHub: the page of a roaming network asks its lists for no entry, which #37 refuses
-`bug` · medium · repository `RoamingHub` · found while writing `examples/example1.md` (2026-10-17) · **fixed in RoamingHub 87ebde5: it asks for one entry, the least the API answers; the counts come from `X-Total-Count` either way**
-
-- **Where:** `RoamingHub/Frontend/src/pages/poiEntities.ts` (the page of a roaming network).
-- **Problem:** since WWCP_POI 69ef28f (#37) the POI API refuses `limit=0`, with which the page asked every list how many
-  it holds: "The roaming network could not be loaded: Invalid limit '0': it must be at least 1!", for every network.
-
-
-### 42. DATEX II: the status of an EVSE tells new prices of tariffs it does not take
-`bug` · medium · repository `WWCP_DatexII` · found in the review of 2026-10-17 · **fixed in WWCP_DatexII cd1f21d: the energy rate updates of an EVSE are those of the tariffs it takes as it is at runtime, the energy rates of the table (test: `POI3TemplateAdapterTests.EnergyRateUpdatesAreOfTheTariffsAnEVSETakes`)**
-
-- **Where:** `WWCP_DatexII_Adapter/POI3/POI3Mapper.cs`, `EnergyRateUpdatesOf(ChargingPool, ChargingStation, EVSE)`, called
-  for every refill point of a site status.
-- **Problem:** it takes every price of `ChargingPrices.Effective(pool, station, evse)`, the price status of the EVSE,
-  else of its station, else of its pool, without asking which tariffs the EVSE takes. New prices a pool gets for its AC
-  tariff T1 are so told in the status of its DC EVSEs too, whose energy rates in the table name only T2. The OCPI 2.3.0
-  adapter filters them (`PricesOf`: by `Operator.EffectiveEVSE(EVSE).ChargingTariffIds`), so the two publishers differ,
-  and a round trip through DATEX II copies the prices of T1 onto those EVSEs.
-- **Fix:** filter by the tariffs of the effective EVSE, as OCPI does; `ToSiteStatus` then needs the operator.
-
-
-### 43. DATEX II: exceptional closings a pool's group gives wake the publisher up only with the next snapshot
-`bug` · medium-low · repository `WWCP_DatexII` · found in the review of 2026-10-17 · **fixed in WWCP_DatexII cd1f21d: the publisher wakes up for the exceptional closings and openings of the effective charging pools, also those their templates give (test: `POI3TemplateAdapterTests.ExceptionalClosingsOfATemplateArePublishedInTime`)**
-
-- **Where:** `WWCP_DatexII_Adapter/POI3/POI3ToDatexIIPublisher.cs`, `ScheduleOpeningChange()` and
-  `PublishOpeningChangesAsync()`.
-- **Problem:** both go through `ChargingStationOperator.ChargingPools`, the pools as they are stored, and their own
-  `OpeningTimes`, while `ToSiteStatus` and `OpeningOf` take the effective pools. A pool whose exceptional closing its
-  `ChargingPoolGroup` gives has none of its own: no wake-up at its begin or end, no delta, and its site is told
-  `TemporarilyClosed` only with the next snapshot or table publication.
-- **Fix:** `EffectiveChargingPools` in both.
-
-
-### 44. OCPI 2.3.0: a location with a REMOVED EVSE whose EVSE ID a new one reuses is not imported
-`bug` · low-medium · repository `WWCP_OCPI` · found in the review of 2026-10-17 · **fixed in WWCP_OCPI 99ea347c, test 26d2dce8: the parking of REMOVED EVSEs is left out, of two of the same identification the last one is taken (test: `POI3TemplateAdapterTests.ARemovedEVSEMayHaveTheEVSEIdOfItsSuccessor`)**
-
-- **Where:** `WWCP_OCPIv2.3.0_Adapter/POI3/OCPIToPOI3Importer.cs`, `ImportParking(…)`: `Location.EVSEs.ToDictionary(evse =>
-  evse.EVSEId?.ToString() ?? evse.UId.ToString(), …)`.
-- **Problem:** a location keeps its EVSEs by their `uid`; their `evse_id` may repeat, e.g. where a CPO marks the old EVSE
-  `REMOVED` and a new one takes its EVSE ID. `ToDictionary` throws, the whole location is not imported, and the worker
-  tells "Importing failed". `ToPOI3` itself leaves the REMOVED one out.
-- **Fix:** leave out REMOVED EVSEs there too, and take the last of the same key instead of `ToDictionary`.
-
-
-### 45. A charging station moved to another pool keeps the last change of its EVSEs, though their tariff changes
-`bug` · low · repository `WWCP_POI` · found in the review of 2026-10-17 · **fixed in WWCP_POI d6b7b42: a change set is compared with the version before it as a whole; what it removed and added again takes its runtime status from that version (it lost it, too) and is compared with it as it is effective (test: `EffectiveLastChangeTests.A_station_moved_to_another_pool_changes_the_last_change_of_its_EVSEs_and_keeps_their_status`)**
-
-- **Where:** `WWCP_POI3/RoamingNetwork/ChargingStationOperator/ChargingStationOperator.Effective.cs`,
-  `StampChangedEffective(Previous)`, together with `RoamingNetwork.InfrastructureChanges.cs` (`Add` stamps only the
-  entity it adds).
-- **Problem:** a move is a `Remove` and an `Add` in one change set. The EVSEs embedded in the added station keep the
-  `lastChange` the client sent; in the version between they do not exist, so `StampChangedEffective` does not compare
-  them, and no group changed. Pool P1 in a pool group with tariff A, P2 in one with tariff B, the station S with the
-  EVSE E without tariffs of its own moved from P1 to P2: E's effective tariff is B, its effective last change
-  max(its own, PG2's), possibly older than the one it had.
-- **Fix:** stamp what an `Add` embeds with the time of the change set as well, or let `StampChangedEffective` compare
-  with the version before the change set; or take the EVSEs whose station or pool changed as candidates.
-
-
-### 46. The floors of effective last changes live in memory only
-`question` · low · repository `WWCP_POI` · found in the review of 2026-10-17 · **fixed in WWCP_POI d6b7b42: the floors are part of the version, kept by snapshots and the base of a store as `effectiveLastChanges`; the version of a merge calculated again compares with both parents, as the merge did (tests: `EffectiveLastChangeTests.A_snapshot_keeps_…`, `A_compacted_store_keeps_…`)**
-
-- **Where:** `effectiveFloors` in `ChargingStationOperator.Effective.cs` and `ParkingOperator.Effective.cs`;
-  `RoamingNetworkHistory.Persistence.cs` (`TryLoad`, `TryFromSnapshot`).
-- **Problem:** the floor a member gets when it leaves a group, or its group stops giving it a value, is neither in the
-  JSON of the roaming network nor in a snapshot. A history loaded again builds its operators by `TryParse`, which
-  calculates the effective members without floors, and replays its log only from its base onward: a member that got
-  its floor before the base (`AttachStore`, `Compact`) has its effective last change go back to max(its own, its
-  groups') after a restart, and a restarted server tells another last change than one that replayed all of the
-  history, for the same ETag of the roaming network.
-- **Fix:** keep the floors with the snapshot of the base (as runtime data of it), or document that an effective last
-  change never goes back only within one process.
-
-
-### 47. A charging station whose EVSEs a group names is moved to another pool only around the group
-`bug` · low · repository `WWCP_POI` · found while fixing #45 (2026-10-18) · **fixed in WWCP_POI 670470e: a change set checks the members of an operator's groups, the groups of its offers and its offers not overlapping after its last change; everything else is still checked after each change (test: `GroupTests.A_station_its_groups_name_is_moved_to_another_pool`)**
-
-- **Where:** `WWCP_POI3/RoamingNetwork/RoamingNetwork.InfrastructureChanges.cs`: every change of a change set is
-  checked as a valid operator (`ChargingStationOperator.TryParse`) right after it is applied.
-- **Problem:** a move is a `Remove` and an `Add`. After the `Remove`, an EVSE group naming one of its EVSEs (or a
-  charging station group naming the station) names a member the operator does not have, and the change set is refused
-  ("The member … of the group … is unknown"); adding it first is refused as well, as it would exist twice. The owner
-  has to take the members out of their groups in the same change set before the `Remove`, and put them back after the
-  `Add`.
-- **Fix:** check the references of groups only after the last change of a change set, or a change kind `Move`.
-
-
-## Checked, no issue
-
-- **Pool, station and tariff ids with a lowercase operator prefix** are fine: `ChargingStationOperator_Id`
-  uppercases its input before matching (`ChargingStationOperator_Id.cs:232`).
-- **Overlapping id patterns** (`DE*GEF*TG1` also matches `ChargingTariff_Id`) are harmless: every caller
-  picks the parser by the explicit entity type.
-- **`ParkingOperator.Ordered`** finds duplicates case-insensitively and orders by ordinal. Case variants
-  can't coexist, so the order is still deterministic.
-- **Review of 2026-10-16** (element changes, the merge by typed identifications, preconditions and ETags, groups giving
-  their members properties): element changes are owned and checked as the change of the property they are part of;
-  identifications compare alike in `KeyOf`, `SameId`, `TryMerge`, `Diff` and `MergeKey`; `Diff` checks itself by
-  replaying its changes; preconditions are signed, part of the commit identification and kept and checked by
-  `TryRebase`, `TryApplyKnown` and `TryAppend`; the entity ETag is the one of `POIRepresentation.Of`, in JSON and CBOR;
-  every property groups give round-trips and is taken by their members, effective members share the runtime status of
-  their members across versions. Two findings in the then new effective members were fixed with them: a member that
-  left its group, or lost a value of it, kept an older last change; identifications in another spelling given by two
-  groups of the same priority were refused as different.
-- **Review of 2026-10-17** (the effective members again, the views of the POI API, the adapters with groups): the
-  group classes round-trip and are validated like their members, every property a group gives is taken, conflicts are
-  told by the keys of the groups' JSON, `X-Stored-ETag`, the ETag of `?view=stored` and the one a precondition names
-  are the same, also on a 304. Fixed with them, besides #42 to #46: a merge, compared with both parents one after the
-  other, dropped the floors of the first comparison and let an effective last change go back; the importers took what
-  groups give as a member's own where they compare arrays: the DATEX II importer subtracted group tariffs from an
-  EVSE's tariffs and current types (which it takes whole, not united), and matched authentication modes by all of
-  their JSON instead of their type; the OCPI 2.3.0 importer had no such keeping at all (`POIGroupMembers.KeepWhatGroupsGive`
-  now, in WWCP_POI, for both), and wrote the parking spaces a station's group gives it as its own; `?view=stored` was
-  taken silently by `~/RNs/{RN}/CPs`, which is now refused, and by lists that have no view, which now ignore it.
-- **Change order within a change set** matters, because the operator is re-parsed after each change: a
-  group must stop naming an EVSE before the EVSE is removed. This is documented in the docs and needs no
-  issue.
+### S24. Pending change sets, commit signatures and co-signing resources are only loosely bounded
+`design` · low · **open**
+
+- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.PendingChangeSets.cs:154` (one global cap of 1000, up
+  to 16 MiB each, no expiry), `History/RoamingNetworkHistory.cs:1065,1145-1177` (commit signatures: role/signer
+  self-asserted, no cap).
+- **Problem:** any party can fill all 1000 pending slots (gigabytes, no expiry) and so block the RNO's own party
+  additions; a trusted key can add unbounded commit signatures by varying `signedAt`; `RequiredSignatureRoles`
+  compares only the claimed role text.
+- **Fix:** a quota and expiry per party for pending change sets; tie commit-signature roles to keys and cap them.
+
+### S25. A pushed merge commit keeps arbitrary change-set signatures
+`bug` · low · **open**
+
+- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.cs:918` (merge compared with `IncludeSignatures:
+  false`), `:946` (stored as sent).
+- **Problem:** SPECIFICATION §5.3 says a merge's change set has no signatures, but a pusher may attach up to the
+  limit; they are stored, served and covered by later commit signatures.
+- **Fix:** refuse a merge whose change set carries signatures.
+
+### S26. A change-set withdrawal is not bound to the content and can be replayed
+`design` · low · **open**
+
+- **Where:** `WWCP_POI/WWCP_POI3/ChangeSet/RoamingNetworkChangeSetWithdrawal.cs:353-366`,
+  `History/RoamingNetworkHistory.PendingChangeSets.cs:412-415`.
+- **Problem:** a withdrawal names no digest and its timestamp is signer-chosen; after a withdrawal anyone may
+  resubmit the public change set and a completed quorum commits it, and a withdrawal can be replayed against a later
+  change set of the same @id.
+- **Fix:** sign the change set's digest, keep tombstones, require fresh signatures after a withdrawal.
+
+### S27. "Suspend" does not revoke a peer's access, and SSH sessions survive account changes
+`bug` · low · **open**
+
+- **Where:** `RoamingHub/RoamingHub/RoamingHub.HubClientInfo.cs:200-212` (suspend only changes presence; the token
+  stays ALLOWED); `WWCP_Node/WWCP_Node/CommandLine/NodeCLI.cs:171-192`, `WWCPNode.SSH.cs:595-694` (the account is
+  checked once per session).
+- **Problem:** a suspended peer still lists everyone and renews its credentials; an open SSH session keeps its rights
+  and log stream after its account is disabled or its key removed (web sessions are cut in the same case).
+- **Fix:** block a suspended peer's access token; re-check `CanAuthenticate` and the key before each SSH command/line.
+
+### S28. `peers:run` returns every peer's tokens on registration
+`bug` · low · **open**
+
+- **Where:** `RoamingHub/RoamingHub/HTTPAPI/RoamingHubHTTPAPI.OCPI.cs:184,202` (authorizes `Run(Peers)` but answers
+  `RemotePartiesJSON(IncludeSecrets: true)`).
+- **Problem:** the README gives tokens only to `peers:edit`, but a role with `peers:read` + `peers:run` gets every
+  token by pressing Register.
+- **Fix:** `IncludeSecrets: IsAllowed(user, Peers, Edit)`.
+
+### S29. Robustness and information leaks
+`bug` · low · **open**
+
+- **Where:** `WWCP_POI/WWCP_POI3/DataStructures/POIEffectiveTree.cs:353,457-464`,
+  `Proofs/RoamingNetworkProof.cs:300,393` (an `@size`/`@index` above Int64 or an object `@id` throws out of
+  `Verify`); `History/RoamingNetworkHistory.cs:793` and siblings (store exception text with file paths in 422/WS
+  errors); `WWCP_Node` signed log `Logging/SignedLog.cs:311-325` (a backward clock step across UTC midnight makes the
+  log read as tampered); `NodeHTTPAPI.Log.cs:67` and `RoamingHub` (`ToReadTheLog` null: any signed-in account reads
+  the full debug log); proof child-array completeness is not exposed (`RoamingNetworkProof.cs:563-597`), so an app may
+  be shown fewer EVSEs or miss a tariff; one trusted attester can evict others' attestations
+  (`History/RoamingNetworkHistory.Attestations.cs:44,262`).
+- **Fix:** range/type-check before `Value<…>()` and return false; return generic error text and log details; order the
+  signed log by id, not file name; add a `log:read` permission; expose per-array completeness in proofs; cap
+  attestations per holder.
+
+### S30. Informative (no change needed, or defence in depth)
+`docs` · info
+
+- Production builds publish source maps (`RoamingHub/.../Frontend/webpack.config.js:41`); the inherited
+  `~/poi/serviceCheck` returns the machine name; the OCPI/Configuration pages show server file paths and OS to any
+  signed-in account; outbound OCPI/Mobilithek TLS does no revocation check; the Mobilithek `url` accepts `http`
+  though its error text says https. The frontend was clean of XSS (lit-html escapes; the one `unsafeHTML` renders a
+  regex-validated QR SVG), paths are pattern-checked, and the CLI reaches no shell.
