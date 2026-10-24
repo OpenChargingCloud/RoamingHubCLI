@@ -113,8 +113,9 @@ namespace cloud.charging.open.RoamingHub.CommandLine
         public override String Help()
 
             => $"{CommandName} [add <id> [<name>] | <id> [add chargingStationOperator|eMobilityProvider|gridOperator|parkingOperator <id> " +
-                "signingKey <key> identityKey <key> [signingKey <key> | identityKey <key> ...] [<name>]]] - the roaming networks of the points of interest, " +
-                "a new one operated by this hub, one of them, and a new party of one";
+                "signingKey <key> identityKey <key> [signingKey <key> | identityKey <key> ...] [<name>] | " +
+                "<id> add chargingStationManufacturer|energyMeterManufacturer <id> [homepage <url>] [<name>]]] - the roaming networks of the points of interest, " +
+                "a new one operated by this hub, one of them, a new party of one, and a new manufacturer in its registries";
 
         #endregion
 
@@ -229,17 +230,23 @@ namespace cloud.charging.open.RoamingHub.CommandLine
             if (Words.Length < 2)
                 return [ $"Usage: {Help()}" ];
 
-            // Its entity type, in the spelling of a JSON property: chargingStationOperator.
-            var entityType = RoamingHub.PartyTypes.Values.FirstOrDefault(type => PartyWord(type).Equals(Words[0], StringComparison.OrdinalIgnoreCase));
+            // Its entity type, in the spelling of a JSON property: chargingStationOperator, or chargingStationManufacturer.
+            var entityType      = RoamingHub.PartyTypes.Values.FirstOrDefault(type => PartyWord(type).Equals(Words[0], StringComparison.OrdinalIgnoreCase));
+            var manufacturer    = RoamingHub.ManufacturerTypes.Values.FirstOrDefault(type => PartyWord(type).Equals(Words[0], StringComparison.OrdinalIgnoreCase));
+
+            entityType        ??= manufacturer;
 
             if (entityType is null)
-                return [ $"A party is one of {String.Join(", ", RoamingHub.PartyTypes.Values.Select(PartyWord))}, not '{Words[0]}'." ];
+                return [ $"A party is one of {String.Join(", ", RoamingHub.PartyTypes.Values.Select(PartyWord))}, a manufacturer one of " +
+                         $"{String.Join(", ", RoamingHub.ManufacturerTypes.Values.Select(PartyWord))}, not '{Words[0]}'." ];
 
-            var signingKeys   = new JArray();
-            var identityKeys  = new JArray();
-            var index         = 2;
+            var signingKeys     = new JArray();
+            var identityKeys    = new JArray();
+            String? homepage    = null;
+            var index           = 2;
 
-            // The keys, each after the word that says which kind it is; the words after them are the name.
+            // The keys, each after the word that says which kind it is, and the homepage of a manufacturer; the words after
+            // them are the name.
             while (index + 1 < Words.Length)
             {
 
@@ -248,6 +255,9 @@ namespace cloud.charging.open.RoamingHub.CommandLine
 
                 else if (Words[index].Equals("identityKey", StringComparison.OrdinalIgnoreCase))
                     identityKeys.Add(Words[index + 1]);
+
+                else if (Words[index].Equals("homepage",    StringComparison.OrdinalIgnoreCase) && manufacturer is not null)
+                    homepage = Words[index + 1];
 
                 else
                     break;
@@ -259,17 +269,24 @@ namespace cloud.charging.open.RoamingHub.CommandLine
             var name = String.Join(" ", Words[index..]).Trim();
             var json = new JObject(new JProperty("@id", Words[1]));
 
-            // A grid operator not taking part comes without keys.
-            if (signingKeys.Count > 0 || identityKeys.Count > 0 || entityType != nameof(GridOperator))
-            {
+            // A party comes with its keys; a grid operator not taking part, and a manufacturer, may come without.
+            var keysOptional = entityType == nameof(GridOperator) || manufacturer is not null;
+
+            if (signingKeys. Count > 0 || !keysOptional)
                 json[POIPartyKeys.SigningKeysProperty]   = signingKeys;
+
+            if (identityKeys.Count > 0 || !keysOptional)
                 json[POIPartyKeys.IdentityKeysProperty]  = identityKeys;
-            }
 
             if (name.Length > 0)
                 json["name"] = new JObject(new JProperty("en", name));
 
-            var result = cli.Hub.AddParty(RoamingNetworkId, entityType, json);
+            if (homepage is not null)
+                json["homepage"] = homepage;
+
+            var result = manufacturer is not null
+                             ? cli.Hub.AddManufacturer(RoamingNetworkId, entityType, json)
+                             : cli.Hub.AddParty       (RoamingNetworkId, entityType, json);
 
             // Waiting for the signatures of its identity keys, as the proof that it holds them.
             if (result.Status == RoamingNetworkPartyStatus.Pending)
@@ -302,7 +319,7 @@ namespace cloud.charging.open.RoamingHub.CommandLine
         #region (private static) PartyWord(EntityType)
 
         /// <summary>
-        /// The word a party of the given entity type is added by: its type, spelled as a JSON property is.
+        /// The word a party or a manufacturer of the given entity type is added by: its type, spelled as a JSON property is.
         /// </summary>
         private static String PartyWord(String EntityType)
 

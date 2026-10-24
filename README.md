@@ -366,11 +366,22 @@ Change 0: Add of the ChargingStationOperator 'DE*QAC' needs a signature by the n
 The operator signs the change set with its identity keys - `GET
 /poi/RNs/QA/history/changeSets/pending/{changeSetId}` gives it - and sends the
 signatures; then it is a member, and adds its data with change sets it signs.
+The manufacturers its charging stations and energy meters name come first, to
+the registries of the network, committed at once:
+
+```
+RoamingHub> roamingNetworks QA add chargingStationManufacturer GraphDefined homepage https://stations.graphdefined.example GraphDefined Charging Stations
+The ChargingStationManufacturer 'GraphDefined' was added to the roaming network 'QA', at revision 1, commit a77d56ee.... Charging stations and energy meters may name it now.
+RoamingHub> roamingNetworks QA add energyMeterManufacturer SAALE Saale Metering
+The EnergyMeterManufacturer 'SAALE' was added to the roaming network 'QA', at revision 2, commit f8b98ef6.... Charging stations and energy meters may name it now.
+```
 
 or `POST /api/v1/poi/RNs` with `{"@id", "name"}` and
 `POST /api/v1/poi/RNs/QA/CSOs` with `{"@id", "name", "signingKeys",
 "identityKeys"}` - below `/api/v1` the paths the POI API serves them at below
-`/poi` - each key the Base64 of its COSE key or a key as POI writes it.
+`/poi` - each key the Base64 of its COSE key or a key as POI writes it; a
+manufacturer `POST /api/v1/poi/RNs/QA/CSMs` (or `EMMs`) with `{"@id", "name",
+"homepage"}`.
 `roamingNetworks` alone lists them, with their revisions, `roamingNetworks QA`
 one with its parties and their keys. Both are
 `poi:edit`, an administrator's, and signed by the hub; so is every commit the
