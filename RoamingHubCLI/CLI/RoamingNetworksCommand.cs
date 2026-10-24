@@ -39,9 +39,11 @@ namespace cloud.charging.open.RoamingHub.CommandLine
     /// &lt;id&gt; [&lt;name&gt;] makes one, operated by this hub - see roamingNetworkOperator. roamingNetworks
     /// &lt;id&gt; shows one with its parties and their keys; roamingNetworks &lt;id&gt; add chargingStationOperator
     /// &lt;operatorId&gt; signingKey &lt;key&gt; identityKey &lt;key&gt; [signingKey &lt;key&gt; | identityKey
-    /// &lt;key&gt; ...] [&lt;name&gt;] adds one of its parties - as well eMobilityProvider, gridOperator or
-    /// parkingOperator - with the public keys of that party: each the Base64 of its COSE key, as the "key" of a
-    /// public key in POI 3 says it. The words after the identification, or after the keys, are the name, in English.
+    /// &lt;key&gt; ...] [&lt;name&gt;] adds one of its parties - as well eMobilityProvider, gridOperator,
+    /// parkingOperator, transparencySoftwareManufacturer or conformityAssessmentBody - with the public keys of that party:
+    /// each the Base64 of its COSE key, as the "key" of a public key in POI 3 says it; a grid operator and a conformity
+    /// assessment body not taking part come without. The words after the identification, or after the keys, are the
+    /// name, in English.
     /// </para>
     /// <para>
     /// Making one and adding a party sign with the keys of this hub, and are poi:edit, as on the web interface: the
@@ -112,7 +114,7 @@ namespace cloud.charging.open.RoamingHub.CommandLine
 
         public override String Help()
 
-            => $"{CommandName} [add <id> [<name>] | <id> [add chargingStationOperator|eMobilityProvider|gridOperator|parkingOperator <id> " +
+            => $"{CommandName} [add <id> [<name>] | <id> [add chargingStationOperator|eMobilityProvider|gridOperator|parkingOperator|transparencySoftwareManufacturer|conformityAssessmentBody <id> " +
                 "signingKey <key> identityKey <key> [signingKey <key> | identityKey <key> ...] [<name>] | " +
                 "<id> add chargingStationManufacturer|energyMeterManufacturer <id> [homepage <url>] [<name>]]] - the roaming networks of the points of interest, " +
                 "a new one operated by this hub, one of them, a new party of one, and a new manufacturer in its registries";
@@ -269,8 +271,9 @@ namespace cloud.charging.open.RoamingHub.CommandLine
             var name = String.Join(" ", Words[index..]).Trim();
             var json = new JObject(new JProperty("@id", Words[1]));
 
-            // A party comes with its keys; a grid operator not taking part, and a manufacturer, may come without.
-            var keysOptional = entityType == nameof(GridOperator) || manufacturer is not null;
+            // A party comes with its keys; a grid operator or a conformity assessment body not taking part, and a
+            // manufacturer, may come without.
+            var keysOptional = entityType is nameof(GridOperator) or nameof(ConformityAssessmentBody) || manufacturer is not null;
 
             if (signingKeys. Count > 0 || !keysOptional)
                 json[POIPartyKeys.SigningKeysProperty]   = signingKeys;
