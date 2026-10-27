@@ -59,6 +59,16 @@ loudly: in the log, below the banner, on the Configuration page and in `/api/v1/
 Left: HSTS is sent on the web interface, not on the JSON API; the other CLIs read the `"web"` section, but take the
 switches only once they pass `NodeArguments.Web` to their node.
 
+**S22 and S23 fixed on 2026-10-27** (Hermod `b38805ec`, WWCP_Node `9e6d00d`, WWCP_POI `7862c86`, RoamingHub
+`691028c`): SSH passwords count against the web sign-in's ration, per client and per account, are hashed outside
+`UsersSemaphore`, and an unknown name is checked against a dummy hash; the legacy `SET /ext/users/{id}/password`
+confirms the current password on the ration of `POST auth/password`. POI_API's nine write routes take
+`application/json` or `application/cbor` alone (else 415); its WebSocket opens to requests without an Origin, from
+its own origin (or the name a trusted proxy gives) or from `allowedOrigins` (the hub's `"poi": { "allowedOrigins" }`),
+else 403. Every request below `/ext` that is no read refuses cross-site requests as `/api` did (`Sec-Fetch-Site`,
+Origin), in one pipeline of the node. The node has no WebSocket of its own; its log and event streams are read-only
+SSE.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
@@ -131,30 +141,6 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
   each attempt carries up to ~256 KiB, and the event log/stream buffers grow.
 - **Fix:** escape CR, LF and C0/C1 control characters and cap peer-supplied strings centrally in the log writers;
   aggregate failed sign-in lines.
-
-### S22. Two password doors skip the sign-in rate limit
-`security` · medium · **open**
-
-- **Where:** `WWCP_Node/WWCP_Node/SecureShell/NodeSSHAuthenticator.cs:130-146` (SSH `VerifyPassword` holds the global
-  `UsersSemaphore` through 600,000 PBKDF2 rounds, no per-IP/account limit),
-  `Hermod/Hermod/HTTP/HTTPAPI/HTTPExtAPI.cs:7686-7840` (legacy `SET /ext/users/{id}/password` verifies the current
-  password with no rate limit).
-- **Problem:** when `ssh.passwords` is on, unauthenticated guesses are unthrottled and block legitimate verification
-  via the shared semaphore; the legacy route lets a cookie/API-key holder guess the current password at hash speed
-  (account takeover).
-- **Fix:** ration both doors (per IP and account), verify outside the semaphore with a dummy hash for unknown names.
-
-### S23. Cross-site POST and WebSocket requests reach the mutating routes
-`design` · medium · **open**
-
-- **Where:** `WWCP_POI/WWCP_POI3/API/POI_API.History.cs:461-466`, `API/POI_API.CoSigning.cs:438-442`,
-  `API/POI_API.WebSocket.cs:240-249` (WebSocket without `AllowedOrigins`); the node's `/ext` routes parse JSON
-  regardless of content type (the hub's own `/api` POSTs, the new `…/CABs/{id}/TSCs` too, refuse cross-site requests).
-- **Problem:** POST handlers accept any non-CBOR content type as JSON, so a "simple" cross-site POST reaches them
-  without a preflight, and the WebSocket has no Origin check. Harmless where writes need owner signatures, but real
-  CSRF/CSWSH where a deployment authenticates by cookie, Basic auth, client certificate or IP.
-- **Fix:** require `application/json`/`application/cbor` on POSTs; set `AllowedOrigins` on the WebSocket endpoints.
-
 
 ### S31. A transparency software manufacturer can change a release after a conformity assessment body certified it
 `security` · medium · **open** (found 2026-10-24 at WWCP_POI `801bbce`, read from the code, no PoC)
