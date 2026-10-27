@@ -35,58 +35,24 @@ they are taken out of this list:
 S5, S11, S12 and S26 are fixed in part; what is left is said in each. The others still hold. Lines given for
 `5a03f14` were checked again; the rest are those of the commits of 2026-10-24.
 
+**Decided and fixed on 2026-10-27** at WWCP_POI `ff2c56f` (super `ac1d46e`), as the maintainer chose:
+
+| Finding | Fixed in WWCP_POI | How |
+|---|---|---|
+| S2 the highest-revision tip is the head, so one party rolls back everyone else | `ef1312d` | a server takes no change set whose commit would conflict with the head (409 with the conflicts); one resolving a conflict on a side tip is taken |
+| S9 conflicting branches without bound (DoS of consensus) | `ef1312d` | a change set only for a version at most `MaxRevisionsBehindHead` (1000) below the head and not before the latest checkpoint (422); conflicting tip pairs remembered until a tip changes; merge bases by one walk back to the fork |
+| S10 the peer trusts a snapshot by a name check | `ff2c56f` | `TrustAnchor` replaces `TrustedRoamingNetworkOperatorKeyIds` and is mandatory; a snapshot carries the attestations of its head, a checkpoint the quorum of the operator; a history held is replaced only where anchored checkpoints prove its head, else kept until `ResetHistoryAsync`; never an earlier epoch |
+
+Left of S2 and S9: commits appended from servers allowed to push (`AuthorizeCommitPush`) are bound by neither rule,
+so such a server can still make a conflicting branch the head of those taking its commits, and a branch it forked long
+ago still holds compaction back (SPECIFICATION.md section 7, open point 2). The hub allows no pushes. Keeping the head
+on its line by the operator's attestations was put off until servers push to each other.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
 
-## Critical
-
-### S2. The head is the highest-revision tip, so one party can roll back everyone else
-`design` · critical · **open; needs a design decision**
-
-- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.cs:1266-1271` at `5a03f14` (tips sorted, head =
-  `tips[0]`), `:1788-1800` (`IsCanonicalOrder`, higher revision first);
-  the RoamingHub attests every new head (`RoamingHub/RoamingHub/RoamingHub.Attestations.cs`).
-- **Problem:** change sets may be committed onto any retained version (`FindVersionFor`,
-  `RoamingNetworkHistory.Persistence.cs:688-722`). A party makes a branch off an old version that conflicts with
-  the main line on a property it owns, then extends it with its own changes until its revision is the highest. That
-  tip becomes the head. Since WWCP_POI `0c3c53c` to `801bbce` charging station and energy meter manufacturers,
-  transparency software manufacturers and conformity assessment bodies are parties owning their models, releases
-  and certificates, so they can do it too.
-- **Impact:** every other party's commits since the fork fall out of the head, and a party the RNO removed returns.
-  `GET`, the DATEX II publication, the runtime status and the RNO-signed attestations then all show the attacker's
-  version. Repeatable. Proven by PoC tests.
-- **Fix:** do not choose between conflicting tips by a revision one owner can inflate; keep the previous head's line
-  until the conflict is resolved, and/or bound how old a version a branch may fork from.
-
-
 ## High
-
-### S9. A party can make a conflicting branch the head to roll back and resurrect data (DoS of consensus)
-`security` · high · **open; needs a design decision (shares the root of S2)**
-
-- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.cs:784,942,1004,1267-1275` (every tip pair retried on
-  each commit), `:1454-1478`, `Persistence.cs:416-428` (merge base O(N²)).
-- **Problem:** nothing bounds the number of conflicting tips. A party commits many mutually conflicting tips off one
-  old version. Every later commit or push then runs O(T²) failing three-way merges, each O(N²), under `historyLock`,
-  and a branch forked at the root stops compaction for good. Every party type can, now also manufacturers,
-  transparency software manufacturers and conformity assessment bodies.
-- **Fix:** cap branches per party and by age, cache pair results until a tip changes, compute merge bases
-  incrementally.
-
-### S10. The peer trusts a snapshot by a name check only, so a server can replace or roll back its history
-`design` · high · **open (affects library users of `RoamingNetworkPeer`; the hub does not run a peer)**
-
-- **Where:** `WWCP_POI/WWCP_POI3/Sync/RoamingNetworkPeer.cs:943-952` (trust = "a trusted key id appears in the
-  snapshot", no signature), `:878-882`, `History/RoamingNetworkHistory.cs:482-516`,
-  `Sync/RoamingNetworkPeer.Checkpoints.cs:150-160`, `Sync/RoamingNetworkPeer.Epochs.cs:46-73`.
-- **Problem:** `TrustedRoamingNetworkOperatorKeyIds` only checks that a trusted key id is present in the snapshot
-  (public keys are public); no signature is verified. A malicious server or a MITM on `ws://` can feed a fabricated
-  network, a rolled-back snapshot (a `commits` NotFound forces a re-snapshot that overwrites the store and loses
-  unpushed local commits), or a fake next epoch.
-- **Fix:** anchor snapshots in a signature by the trusted keys (an attestation or checkpoint of that commit), require
-  descent from the current head before replacing a history, never downgrade silently, and fail closed when a verifier
-  is configured.
 
 ### S12. Public, unauthenticated reads can exhaust CPU and memory, and some still hold the history lock
 `security` · high · **open** (updated 2026-10-23 with the load-test session, at WWCP_POI `c2fe6ff`; lines checked
