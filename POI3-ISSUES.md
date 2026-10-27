@@ -54,37 +54,6 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 
 ## High
 
-### S12. Public, unauthenticated reads can exhaust CPU and memory, and some still hold the history lock
-`security` · high · **open** (updated 2026-10-23 with the load-test session, at WWCP_POI `c2fe6ff`; lines checked
-2026-10-24 at `801bbce`; the proof window fixed in `cbf20d5`)
-
-- **Already done:** WWCP_POI `34ffb02` moved most readers of a history to an immutable view
-  (`History/RoamingNetworkHistory.ReadView.cs`) instead of `historyLock`: `Root`, `Count`, `Contains`,
-  `TryGetCommit`, `TryGetCommitsSince`, `HaveIds`, `TryGetMissingCommits`, the attestations, both
-  `TryGetChargingStationProof`, and the checkpoints. They no longer wait behind a running commit. Measured in
-  `WWCP_POI3_LoadTests/README.md` (Results; reports `results/loadtest-ryzen7-3700x-20261023-001737` before, at
-  `6661d2d`, and `results/loadtest-ryzen7-3700x-mvcc-20261023-030214` after; Ryzen 7 3700X, 128 GiB, .NET 10,
-  server GC): at 50k stations and 4 writers the longest wait of a `TryGetCommit` reader fell from 46.8 s to 0.41 s,
-  the total wait from 47.3 s to 2.5 s, and proof p99 from 12.5 to 5.7 ms; at 10k stations and 4 writers proof p99
-  fell from 9,250 ms to 1.3 ms. The rest is GC pauses behind merges that allocate gigabytes. Since WWCP_POI
-  `cbf20d5` a proof that comes between a new head being published and its attestation takes the head attested last,
-  without the lock (with 8 writers the longest proof fell from 31 s to a GC pause, 180-270 ms).
-- **Still under `historyLock`:** the `Tips` getter (`History/RoamingNetworkHistory.cs:213-220` at `5a03f14`,
-  recalculates versions via `VersionOf`), `TryGetCommitProof`, `TryGetPendingChangeSet`
-  (`History/RoamingNetworkHistory.PendingChangeSets.cs:191-213`, re-verifies every signature via
-  `TryCheckCoSigning` on each read), the `PendingChangeSets` getter, and the archive.
-- **Still attacker-scaled, without the lock:** `have` lists (`TryGetMissingCommits`,
-  `History/RoamingNetworkHistory.cs:1912-` at `5a03f14`) are unbounded and cost O(K·N), one `view.Ancestors` per
-  known id plus a linear filter of the commits: CPU, no longer a commit stall. WebSocket batches of up to 1000 heavy
-  reads without cancellation (`WebSocket/POIWebSocketServer.cs:684-750`), up to 16,383 (2^14−1) cached `?without=`
-  views per charging station operator version and format (`API/POI_API.Entities.cs:2241-2266,2356-2427`; a roaming
-  network 63 per ETag count, each manufacturer, transparency software manufacturer and conformity assessment body
-  one more), and unbounded `match`/`limit` (`API/POI_API.Query.cs:71-101`, also on the new `models`, `TSs` and
-  `TSCs` lists).
-- **Fix:** move the remaining readers to the view and cache pending-signature verification; cap and deduplicate
-  `have`; restrict batches to write/status actions with a byte budget and per-item cancellation; bound the
-  `?without=` cache; cap `match`/`limit`. Not in work as of 2026-10-27.
-
 ### S13. The hub serves its web interface, API and sign-in over plain HTTP only
 `design` · high · **open**
 
@@ -99,6 +68,23 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 
 
 ## Medium
+
+### S12. Public, unauthenticated reads can still cost CPU without bound
+`security` · medium (was high) · **fixed in part** in WWCP_POI `33447ac` (super `83ec538`, 2026-10-27)
+
+- **Fixed:** no public reader takes `historyLock` any more: the tips, `TryGetCommitProof`, checkpoint snapshots, the
+  pending change sets (their co-signing checks cached until the tips or checkpoints change) and the archive reads come
+  from the read view (`History/RoamingNetworkHistory.ReadView.cs`). `have` is capped (`POI_API.MaxHaveIds`, 1,000),
+  deduplicated and walked back from the tips, newest revision first, instead of O(K·N); an honest peer names about 25
+  ids. WebSocket batches only for actions that change something or set a status, their answers within
+  `POIWebSocketServer.MaxBatchResponseBytes` (4 MiB), the rest skipped once the connection closes. `?without=` views
+  kept up to `POI_API.MaxOmissionViews` (16) per version. List `limit` at most `MaxListLimit` (1,000), `match` at most
+  256 characters and 16 words. SPECIFICATION.md section 5.5.
+- **Left:** a `?without=` view beyond the 16 kept is serialized for every request, and an attacker can take the 16
+  slots of the head version first; a `have` naming only the root and `GET commits` without `since` still walk the
+  whole history (O(N log N) per page, as before); nothing limits how many requests, snapshots or large checkpoint
+  snapshots arrive at once (no rate limit); over HTTP only the last of repeated `have=` parameters counts.
+- **Fix:** an LRU or a cost budget for `?without=`, a rate limit per client for the heavy reads.
 
 ### S17. Price-statement chains are keyed by raw entity text, and storage is unbounded per operator
 `bug` · medium · **open**
