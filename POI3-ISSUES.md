@@ -15,6 +15,26 @@ these commits. The parties added since the audit (transparency software manufact
 conformity assessment bodies in `bbd4cbd`, charging station and energy meter manufacturers with their models in
 `801bbce`) are further instances of several findings, noted in each, and gave the new findings S31 to S36.
 
+**Checked again on 2026-10-27** at WWCP_POI `5a03f14` (RoamingHub `397e478`, Styx `06b592d3`, super `a5ceb23`; WWCP_Node,
+Hermod and WWCP_OCPI unchanged). A review written while porting WWCP_POI to TypeScript (WWCPPOIConformanceTests,
+`docs/csharp-review.md`, cited as *csharp-review N*) found several of these findings again; WWCP_POI fixed them, and
+they are taken out of this list:
+
+| Finding | Fixed in WWCP_POI | How |
+|---|---|---|
+| S3 a change set for an old version escapes revocation | `f2ae688` (csharp-review 3) | keys checked at `createdAt` and when the server takes it; a revoked key conflicts in the merge |
+| S6 the quorum counts holders a key statement names | `3e32f48` (csharp-review 1) | the trust anchor names its keys per holder (v2); a key keeps its holder |
+| S7 attestations without expiry, keys checked at `signedAt` | `be07037` (csharp-review 7) | `validUntil` required, at most 24 h; keys valid when attesting and when verified |
+| S15 a change set committed by its `@id` alone | `bc3b1bd`, `1717ee2` (csharp-review 4, 12) | the `@id` is the SHA-256 of the content; `rebasedFrom` entries recalculated |
+| S16 a subject attestation verifies the whole proof | `6e469a0`, `65e658d` (csharp-review 6, 19) | root attestations in the role `roamingNetworkOperator` only; `VerifySubject`; no statement or certificate of another operator |
+| S18 witnesses sign unchecked checkpoints | `c5cfc62` (csharp-review 5) | a checkpoint taken without its commits is not witnessed; a witness keeps a journal |
+| S33 references block withdrawals | `52f1172` (csharp-review 18) | decided as designed: SPECIFICATION.md 4.1 says what another party names is not withdrawn while it names it, also not by the RNO; both change it in one change set both sign |
+| S34 RNO-stated certificates look like the body's | `65e658d` (csharp-review 15) | `"statedBy": "roamingNetworkOperator"`; the hub sets it since RoamingHub `397e478` |
+| S35 a meter's certificate is not tied to the model | `987fa26`, `7e0b0ac` (csharp-review 16, 17) | a certificate is for one model, its revisions and firmware versions, and is checked against each station and meter naming it |
+
+S5, S11, S12 and S26 are fixed in part; what is left is said in each. The others still hold. Lines given for
+`5a03f14` were checked again; the rest are those of the commits of 2026-10-24.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
@@ -24,8 +44,8 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 ### S2. The head is the highest-revision tip, so one party can roll back everyone else
 `design` · critical · **open; needs a design decision**
 
-- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.cs:1208-1214` (tips sorted, head = `tips[0]`),
-  `:1540-1552` (`IsCanonicalOrder`, higher revision first), `:1254-1303` (conflicting tips stay);
+- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.cs:1266-1271` at `5a03f14` (tips sorted, head =
+  `tips[0]`), `:1788-1800` (`IsCanonicalOrder`, higher revision first);
   the RoamingHub attests every new head (`RoamingHub/RoamingHub/RoamingHub.Attestations.cs`).
 - **Problem:** change sets may be committed onto any retained version (`FindVersionFor`,
   `RoamingNetworkHistory.Persistence.cs:688-722`). A party makes a branch off an old version that conflicts with
@@ -39,72 +59,11 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 - **Fix:** do not choose between conflicting tips by a revision one owner can inflate; keep the previous head's line
   until the conflict is resolved, and/or bound how old a version a branch may fork from.
 
-### S3. A change set made for an old version is merged into the head without re-checking keys, so nothing is revoked
-`design` · critical · **open; needs a design decision**
-
-- **Where:** `WWCP_POI/WWCP_POI3/RoamingNetwork/RoamingNetwork.Ownership.cs:410-435` (ownership checked against
-  the version the change set applies to), `History/RoamingNetworkHistory.cs:760-764`, `:914-915`,
-  `RoamingNetwork.Merge.cs` (the three-way merge does no ownership check).
-- **Problem:** a change set is checked against the keys of the version it is committed to. A commit made for a
-  version before a key rotation, a certificate removal or a party removal is accepted as a branch and then merged
-  into the head, without re-checking it against the head's keys. Contradicts SPECIFICATION §8.6 ("a key is revoked
-  by removing its certificate"). The window is the whole retained history (in the hub ≥ 1000 revisions).
-- **Impact:** a leaked or withdrawn signing key, a removed RNO signing-key certificate, or a replaced compromised
-  identity key keeps working. Proven by a PoC test (removed key still changes the head). Since WWCP_POI `0c3c53c` to
-  `801bbce` this includes the keys of manufacturers, transparency software manufacturers and conformity assessment
-  bodies: a withdrawn key of a body still issues or changes transparency software certificates.
-- **Fix:** re-verify a branch's change sets against the head's keys when merging and treat a failure as a conflict,
-  or accept change sets only for the tips / recent versions.
-
 
 ## High
 
-### S5. `createdAt`/`signedAt` are chosen by the signer, which neutralises `notBefore`/`notAfter`
-`design` · high · **open; needs a design decision**
-
-- **Where:** `WWCP_POI/WWCP_POI3/RoamingNetwork/RoamingNetwork.Ownership.cs:577` (`key.IsValidAt(ChangeSet.CreatedAt)`);
-  `createdAt` is never compared with the parent's `lastChange` or with server time, and is written as the
-  `lastChange` of manufacturers, transparency software manufacturers and conformity assessment bodies
-  (`RoamingNetwork.ModelChanges.cs:310`, `RoamingNetwork.TransparencySoftwareChanges.cs:238`,
-  `RoamingNetwork.TransparencySoftwareCertificateChanges.cs:238`); the same for price statements' `signedAt`
-  (`Proofs/RoamingNetworkPriceStatement.cs:500`, `History/RoamingNetworkHistory.PriceStatements.cs:267`).
-- **Problem:** key validity is checked at a timestamp the signer writes. The holder of an expired but still-listed
-  key backdates `createdAt` into its validity; a future `createdAt` pushes `lastChange` and merge timestamps forward.
-  A conformity assessment body with an expired key backdates a certificate it issues the same way. Proven by a PoC
-  test.
-- **Fix:** require parent `lastChange` ≤ `createdAt` ≤ now + a small skew.
-
-### S6. The offline quorum counts holders taken from the key statement being verified
-`design` · high · **open; needs a design decision**
-
-- **Where:** `WWCP_POI/WWCP_POI3/Proofs/RoamingNetworkKeyStatement.cs:621-659` (holders of its signatures),
-  `Proofs/RoamingNetworkProof.cs:413-428` (holders of the attestations, by the labels of signing-key certificates,
-  which must be those of the certifying identity keys, `Proofs/RoamingNetworkSigningKeyCertificate.cs:281`),
-  `Proofs/RoamingNetworkTrustAnchor.cs` (pins only key @ids and `minConsensus`, no holder grouping).
-- **Problem:** a trust anchor pins only identity-key @ids and a number. When counting the holders that signed a key
-  statement, the holder label of each key is read from the statement itself. One company holding several pinned
-  identity keys (e.g. during the rotation overlap §4.1 recommends) can label them as different holders and reach the
-  quorum alone, and, with signing keys it certifies under each label, attest the root alone. Proven by a PoC against
-  the trust-anchor path.
-- **Fix:** the trust anchor must pin the holder grouping (a new format), and the verifier must count by the pinned
-  groups and refuse a statement that relabels pinned keys.
-
-### S7. Expiry and revocation can not be enforced by offline verifiers
-`design` · high · **open; needs a design decision**
-
-- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkAttestation.cs:417-419` (`IsValidAt` has no lower bound and no
-  required `validUntil`), `Proofs/RoamingNetworkProof.cs:381-391` (keys/certificates taken from the proof),
-  `Proofs/RoamingNetworkKeyStatement.cs`, `Proofs/RoamingNetworkPriceStatement.cs`.
-- **Problem:** an attestation needs no `validUntil`, a key statement's `validUntil` has no upper bound, validity is
-  checked only at the signer-chosen `signedAt`, and a dropped certificate still verifies in an old proof. A leaked
-  old signing key plus a backdated attestation verifies against a pinned identity key; the same holds for a
-  withdrawn transparency software certificate or a release past its `supportUntil` in an old station proof. Proven
-  by a PoC.
-- **Fix:** require a short-lived `validUntil` and `signedAt` ≤ verification time; require keys and certifying
-  identity keys valid at verification time; add an offline revocation horizon.
-
 ### S9. A party can make a conflicting branch the head to roll back and resurrect data (DoS of consensus)
-`security` · high · **open; needs a design decision (shares the root of S2/S3)**
+`security` · high · **open; needs a design decision (shares the root of S2)**
 
 - **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.cs:784,942,1004,1267-1275` (every tip pair retried on
   each commit), `:1454-1478`, `Persistence.cs:416-428` (merge base O(N²)).
@@ -129,20 +88,9 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
   descent from the current head before replacing a history, never downgrade silently, and fail closed when a verifier
   is configured.
 
-### S11. ECDSA signatures are not required to be low-S (malleable)
-`security` · high · **open**
-
-- **Where:** `Styx/Styx/Illias/COSE/COSEAlgorithm.cs:1376-1422` (`VerifyECDSA` accepts both S and n−S).
-- **Problem:** a third party can flip the S of a valid ECDSA signature to a second valid one. For a price statement
-  this yields a second, differently-serialised statement of the same entity and sequence, which the chain rule treats
-  as a split view and refuses on other servers. A history also keeps the flipped copy of a trusted attestation as
-  another one (`WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.Attestations.cs:254`), which feeds the eviction of
-  S29.
-- **Fix:** require canonical low-S ECDSA on verification (and reject non-canonical signatures).
-
 ### S12. Public, unauthenticated reads can exhaust CPU and memory, and some still hold the history lock
 `security` · high · **open** (updated 2026-10-23 with the load-test session, at WWCP_POI `c2fe6ff`; lines checked
-2026-10-24 at `801bbce`)
+2026-10-24 at `801bbce`; the proof window fixed in `cbf20d5`)
 
 - **Already done:** WWCP_POI `34ffb02` moved most readers of a history to an immutable view
   (`History/RoamingNetworkHistory.ReadView.cs`) instead of `historyLock`: `Root`, `Count`, `Contains`,
@@ -152,25 +100,24 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
   `6661d2d`, and `results/loadtest-ryzen7-3700x-mvcc-20261023-030214` after; Ryzen 7 3700X, 128 GiB, .NET 10,
   server GC): at 50k stations and 4 writers the longest wait of a `TryGetCommit` reader fell from 46.8 s to 0.41 s,
   the total wait from 47.3 s to 2.5 s, and proof p99 from 12.5 to 5.7 ms; at 10k stations and 4 writers proof p99
-  fell from 9,250 ms to 1.3 ms. The rest is GC pauses behind merges that allocate gigabytes.
-- **Still under `historyLock`:** the `Tips` getter (`History/RoamingNetworkHistory.cs:213-217`, recalculates
-  versions via `VersionOf`), `TryGetCommitProof`, `TryGetPendingChangeSet`
+  fell from 9,250 ms to 1.3 ms. The rest is GC pauses behind merges that allocate gigabytes. Since WWCP_POI
+  `cbf20d5` a proof that comes between a new head being published and its attestation takes the head attested last,
+  without the lock (with 8 writers the longest proof fell from 31 s to a GC pause, 180-270 ms).
+- **Still under `historyLock`:** the `Tips` getter (`History/RoamingNetworkHistory.cs:213-220` at `5a03f14`,
+  recalculates versions via `VersionOf`), `TryGetCommitProof`, `TryGetPendingChangeSet`
   (`History/RoamingNetworkHistory.PendingChangeSets.cs:191-213`, re-verifies every signature via
-  `TryCheckCoSigning` on each read), the `PendingChangeSets` getter, and the archive. A proof also takes the lock once
-  when it hits the window between a new head being published and its attestation (`Take`); that window lasts
-  milliseconds, but a slow `OnCommitAnnouncement` subscriber stretches it.
+  `TryCheckCoSigning` on each read), the `PendingChangeSets` getter, and the archive.
 - **Still attacker-scaled, without the lock:** `have` lists (`TryGetMissingCommits`,
-  `History/RoamingNetworkHistory.cs:1675-1699`) are unbounded and cost O(K·N), one `view.Ancestors` per known id
-  plus a linear filter of the commits: CPU, no longer a commit stall. WebSocket batches of up to 1000 heavy reads
-  without cancellation (`WebSocket/POIWebSocketServer.cs:684-750`), up to 16,383 (2^14−1) cached `?without=` views
-  per charging station operator version and format (`API/POI_API.Entities.cs:2241-2266,2356-2427`; a roaming
+  `History/RoamingNetworkHistory.cs:1912-` at `5a03f14`) are unbounded and cost O(K·N), one `view.Ancestors` per
+  known id plus a linear filter of the commits: CPU, no longer a commit stall. WebSocket batches of up to 1000 heavy
+  reads without cancellation (`WebSocket/POIWebSocketServer.cs:684-750`), up to 16,383 (2^14−1) cached `?without=`
+  views per charging station operator version and format (`API/POI_API.Entities.cs:2241-2266,2356-2427`; a roaming
   network 63 per ETag count, each manufacturer, transparency software manufacturer and conformity assessment body
   one more), and unbounded `match`/`limit` (`API/POI_API.Query.cs:71-101`, also on the new `models`, `TSs` and
   `TSCs` lists).
-- **Fix:** move the remaining readers to the view and cache pending-signature verification; keep slow
-  `OnCommitAnnouncement` subscribers out of the publish-to-attest window; cap and deduplicate `have`; restrict
-  batches to write/status actions with a byte budget and per-item cancellation; bound the `?without=` cache; cap
-  `match`/`limit`. Not in work as of 2026-10-23.
+- **Fix:** move the remaining readers to the view and cache pending-signature verification; cap and deduplicate
+  `have`; restrict batches to write/status actions with a byte budget and per-item cancellation; bound the
+  `?without=` cache; cap `match`/`limit`. Not in work as of 2026-10-27.
 
 ### S13. The hub serves its web interface, API and sign-in over plain HTTP only
 `design` · high · **open**
@@ -187,35 +134,6 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 
 ## Medium
 
-### S15. A change set's @id and `rebasedFrom` are trusted, so one party can make another's change set vanish
-`security` · medium · **open**
-
-- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.cs:1749-1756` (`Remember` marks every id and every
-  `metadata.rebasedFrom[].@id` committed, without comparing content), `:1797-1828`,
-  `History/RoamingNetworkHistory.PendingChangeSets.cs:491-497`.
-- **Problem:** pending change sets are public. A party commits a change set of its own whose `@id` equals a victim's,
-  or whose `rebasedFrom` lists victims' ids. The victims' change sets are then dropped and reported `committed` with
-  the attacker's commit. Proven by a PoC (the RNO's removal of a party is reported committed but never applied).
-- **Fix:** compare content before treating an id as committed or forgetting a pending change set; honour
-  `rebasedFrom` only for rebases this server verified.
-
-### S16. A charging-station-operator "subject" attestation leaves the root unattested and its role is not checked
-`bug` · medium · **open**
-
-- **Where:** `WWCP_POI/WWCP_POI3/Proofs/RoamingNetworkProof.cs:220-242,269-274,385-391,413-428,871-887`,
-  `Proofs/RoamingNetworkEffectiveTree.cs:220-423` (what a station proof gives outside the operator's node).
-- **Problem:** a proof verified with a CSO subject attestation (or, on the trust-anchor path, any RNO-certified key
-  with role `chargingStationOperator`) passes while everything outside the CSO node is fabricated: the network name,
-  the RNO and its key statement, and every party a station proof carries beside the operator: the charging station
-  manufacturer and the model the station names, the energy meter manufacturers and their models, the transparency
-  software manufacturers and the releases, the conformity assessment bodies and the (MID/CRA) transparency software
-  certificates the meters name, the grid and parking operators, keys included. The ids the station and its meters
-  name are attested, what they resolve to is not. Root and subject attestations of different roots are counted
-  together. Proven by a PoC (before the manufacturers, bodies and models were added to station proofs).
-- **Fix:** require `eTag` == root for a subject attestation, or restrict `Given()`/`GivenBelow()` to the attested
-  subject (a station proof verified by one then gives no manufacturers, models, releases or certificates); the
-  trust-anchor path must require role `roamingNetworkOperator` and no subject.
-
 ### S17. Price-statement chains are keyed by raw entity text, and storage is unbounded per operator
 `bug` · medium · **open**
 
@@ -228,17 +146,6 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
   2^64−1 ends a chain for good.
 - **Fix:** key chains by the canonical typed id and refuse a non-canonical `entityId`; per-operator quotas, no
   cross-operator eviction, bound sequence jumps with checked arithmetic.
-
-### S18. Witnesses sign checkpoints they could not check
-`bug` · medium · **open**
-
-- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.Checkpoints.cs:409-446,849-870,196`.
-- **Problem:** a witness that joined from a checkpoint takes its first checkpoint without recomputing `commits` or
-  checking `sequence`/`previousId`, and `TryWitness` signs it. A malicious RNO can bootstrap witnesses with a
-  checkpoint whose commits tree holds a fabricated commit, which then counts as witnessed (§10.4). A first checkpoint
-  of `sequence` 2^64−1 overflows `latest.Sequence + 1`.
-- **Fix:** mark checkpoints taken unchecked and refuse to witness them; require `sequence` 0 for the first checkpoint;
-  checked arithmetic.
 
 ### S19. SSRF through URLs a peer supplies during the OCPI credentials handshake
 `design` · medium · **open**
@@ -306,8 +213,9 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 
 - **Where:** `WWCP_POI/WWCP_POI3/RoamingNetwork/RoamingNetwork.TransparencySoftwareChanges.cs:43-54` (`version`,
   `name`, `sourceCodeRepository`, `openSourceLicenses` … changeable), `RoamingNetwork.Ownership.cs:1034-1072` (owned
-  by the manufacturer alone), `WWCP_POI2/.../TransparencySoftwareCertificate.cs:160,412`
-  (`VerifiedTransparencySoftwareIds`, `Covers`: a certificate binds to the release id only),
+  by the manufacturer alone), `WWCP_POI2/RoamingNetwork/ConformityAssessmentBody/ConformityCertificate.cs:216` at
+  `5a03f14` (`VerifiedTransparencySoftwareIds`: since WWCP_POI `987fa26` a certificate is for a model and names the
+  releases among its components, still by their ids only),
   `RoamingNetwork/RoamingNetwork.cs:2368-2404` (`UnknownTransparencyReference` checks only that the id exists).
 - **Problem:** before WWCP_POI `0c3c53c` the RNO owned both releases and certificates. Now the manufacturer alone may
   rewrite the `version` (or anything else) of a release that another party's certificate and the CSOs' meters name.
@@ -327,7 +235,8 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 - **Problem:** the RNO vets a body when it adds it. Afterwards the body alone can add "MID" or "CRA" to `notifiedFor`,
   or take another body's number (e.g. 0102), and in the same change set issue certificates under that legislation:
   the only check, `NotifiedFor.Contains`, is met by its own edit. Once the body has keys, the RNO cannot correct these
-  fields; it can only remove the body (which S33 may block) or recover its keys.
+  fields; it can only remove the body, in a change set every party naming its certificates signs as well
+  (SPECIFICATION.md 4.1 since WWCP_POI `52f1172`), or recover its keys.
 - **Impact:** proofs present a certificate under the MID from a body that "is notified for MID", with a forged
   notified-body number; example A13 prints exactly these fields as what to trust.
 - **Fix:** let `notifiedBodyNumber` and `notifiedFor` be owned by the RNO (or need its co-signature); require
@@ -335,6 +244,35 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 
 
 ## Low
+
+### S5. `createdAt` is chosen by the signer and may lie before the version it changes
+`design` · low (was high) · **open in part; needs a design decision**
+
+- **Fixed in part:** since WWCP_POI `f2ae688` a key must be valid at `createdAt` and when the server takes the change
+  set, and a `createdAt` more than `MaxClockSkew` (5 minutes) after the server's time is refused
+  (`History/RoamingNetworkHistory.cs:800-808` at `5a03f14`, the same for co-signing); since `be07037` the key of a
+  price statement or an attestation must be valid at the time verified as well. An expired key no longer signs by
+  a backdated timestamp, and a future one no longer pushes `lastChange` forward.
+- **Left:** `createdAt` is still not compared with the parent's `lastChange`. A party may backdate a change set to
+  any time its key was valid; that time becomes the `lastChange` of what it changes, earlier than the version
+  before, and of manufacturers, transparency software manufacturers and conformity assessment bodies alike.
+- **Fix:** require parent `lastChange` ≤ `createdAt`, or say in the specification that `lastChange` is the signer's
+  claim only.
+
+### S11. ECDSA signatures are not required to be low-S (malleable)
+`security` · low (was high) · **open in part**
+
+- **Where:** `Styx/Styx/Illias/COSE/COSEAlgorithm.cs:1376-1422` (`VerifyECDSA` accepts both S and n−S; unchanged at
+  Styx `06b592d3`).
+- **Fixed in part:** the price-statement case, the reason for "high", is fixed in WWCP_POI `dbf39b0`
+  (csharp-review 2): the digest of a price statement leaves its signature value out, so a flipped twin is the same
+  statement and no longer a split view.
+- **Left:** a third party can still flip the S of a valid ECDSA signature to a second valid one. A history keeps the
+  flipped copy of a trusted attestation as another one, as it compares the signature value
+  (`WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.Attestations.cs:277` at `5a03f14`), which feeds the eviction of
+  S29; anything else keyed by a signature value is open to the same.
+- **Fix:** require canonical low-S ECDSA on verification (and reject non-canonical signatures), or compare
+  attestations by their signature input.
 
 ### S24. Pending change sets, commit signatures and co-signing resources are only loosely bounded
 `design` · low · **open**
@@ -356,16 +294,18 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
   limit; they are stored, served and covered by later commit signatures.
 - **Fix:** refuse a merge whose change set carries signatures.
 
-### S26. A change-set withdrawal is not bound to the content and can be replayed
-`design` · low · **open**
+### S26. A withdrawn change set can be submitted again, and a withdrawal's time is the signer's
+`design` · low · **open in part** (the binding to the content fixed by WWCP_POI `bc3b1bd`)
 
 - **Where:** `WWCP_POI/WWCP_POI3/ChangeSet/RoamingNetworkChangeSetWithdrawal.cs:353-366`,
-  `RoamingNetwork/RoamingNetwork.Ownership.cs:476-511` (key valid at the signer's `withdrawnAt`),
-  `History/RoamingNetworkHistory.PendingChangeSets.cs:417-420`.
-- **Problem:** a withdrawal names no digest and its timestamp is signer-chosen; after a withdrawal anyone may
-  resubmit the public change set and a completed quorum commits it, and a withdrawal can be replayed against a later
-  change set of the same @id.
-- **Fix:** sign the change set's digest, keep tombstones, require fresh signatures after a withdrawal.
+  `RoamingNetwork/RoamingNetwork.Ownership.cs:518` at `5a03f14` (key valid at the signer's `withdrawnAt` only),
+  `History/RoamingNetworkHistory.PendingChangeSets.cs:407-` (no tombstone).
+- **Fixed in part:** since WWCP_POI `bc3b1bd` the `@id` a withdrawal names is the SHA-256 of the change set's content,
+  so a withdrawal is bound to the content and can no longer be replayed against another change set.
+- **Left:** after a withdrawal anyone may submit the public change set again, and a completed quorum commits it; the
+  key of a withdrawal is checked at its signer-chosen `withdrawnAt` only, not also when the server takes it, as
+  change sets are since `f2ae688`.
+- **Fix:** keep tombstones, require fresh signatures after a withdrawal, check the key when the withdrawal is taken.
 
 ### S27. "Suspend" does not revoke a peer's access, and SSH sessions survive account changes
 `bug` · low · **open**
@@ -401,47 +341,6 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 - **Fix:** range/type-check before `Value<…>()` and return false; return generic error text and log details; order the
   signed log by id, not file name; add a `log:read` permission; expose per-array completeness in proofs; cap
   attestations per holder.
-
-### S33. References across parties let one party freeze another's data and block the RNO from removing a member
-`design` · low · **open; needs a design decision** (found 2026-10-24 at WWCP_POI `801bbce`, read from the code)
-
-- **Where:** `WWCP_POI/WWCP_POI3/RoamingNetwork/RoamingNetwork.ChangeSets.cs:1128-1159` (reference rules on the whole
-  state after every change set: `UnknownManufacturer`, `UnknownTransparencyReference`,
-  `UnknownEnergyMeterManufacturer`), `RoamingNetwork.cs:2375-2382,2984-3037`.
-- **Problem:** what is referenced is now owned by parties other than the one referring and the RNO. A CSO or grid
-  operator naming a model (station, template or meter) keeps its manufacturer from removing it; a body's certificate
-  naming manufacturer, model and version keeps the manufacturer from removing the model or that version; a meter
-  naming a certificate keeps the body from removing it; a meter or certificate naming a release keeps the transparency
-  software manufacturer from removing it. The RNO's removal of a manufacturer, transparency software manufacturer or
-  body ("removes all its data with it") is refused while anybody references one of its children.
-- **Impact:** a party cannot withdraw what it published; a misbehaving manufacturer or body (see S32) cannot be
-  removed without every referencing party's help. Certificates (`notAfter`) and releases (`supportUntil`) can at
-  least be let expire; models cannot.
-- **Fix:** express the removal of a referenced child as a withdrawal or deprecation, or cascade or unlink the
-  references; at least let the RNO's removal of a party take precedence.
-
-### S34. Certificates the RNO entered for a keyless body look like the body's own once it has keys
-`design` · low · **open** (found 2026-10-24 at WWCP_POI `801bbce`, read from the code)
-
-- **Where:** `WWCP_POI/WWCP_POI3/RoamingNetwork/RoamingNetwork.Ownership.cs:1076-1115` with `SignerOf` (`:903-907`)
-  and the parties without keys (`:1484-1487`), `ConformityAssessmentBody.cs:62-69` ("its certificates are statements
-  of the RNO then"); a certificate has no issuer or signer field (`TransparencySoftwareCertificate.cs:129-190`).
-- **Problem:** nothing in the data or a proof records that a certificate was signed by the RNO. When the RNO later
-  gives the body keys, all its earlier certificates look issued by the body (example A13 decides "signed by itself"
-  from the body's current keys).
-- **Fix:** record per certificate whether the RNO signed it, or make the body issue its certificates again when it
-  gets keys.
-
-### S35. Nothing ties a meter's certificate to its station's model
-`bug` · low · **open** (found 2026-10-24 at WWCP_POI `801bbce`, read from the code)
-
-- **Where:** `WWCP_POI/WWCP_POI3/RoamingNetwork/RoamingNetwork.cs:2386-2404` (only that the certificate exists and
-  `Covers` the release).
-- **Problem:** a CSO can give any meter a certificate for another manufacturer or model. A station names no version
-  of its model, so the certified version can never be matched, and a station proof does not carry the certificate's
-  own manufacturer and model where they differ from the station's. Only example A13 compares the two, by hand.
-- **Fix:** refuse a certificate whose manufacturer and model differ from those of the effective station; consider a
-  model version on stations.
 
 ### S36. Release and certificate ids are unique in the network, not within their owner
 `design` · low · **open** (found 2026-10-24 at WWCP_POI `801bbce`, read from the code)
