@@ -48,23 +48,19 @@ so such a server can still make a conflicting branch the head of those taking it
 ago still holds compaction back (SPECIFICATION.md section 7, open point 2). The hub allows no pushes. Keeping the head
 on its line by the operator's attestations was put off until servers push to each other.
 
+**S13 fixed on 2026-10-27** (WWCP_Node `c2422e1`, Hermod `f1a6bbd8`, RoamingHub `80c1db7`), as the maintainer
+chose: every node, the hub among them, serves HTTPS of its own or trusts the proxies named in
+`"web": { "trustedProxies" }`, from the `"web"` section of the configuration file or from `--https`,
+`--https-cert`/`--https-key`, `--redirect-port` and `--trusted-proxy`. The certificate comes from the store (the TLS
+server identity for the listener `web`) or from PEM files read again when they change; with nothing to show a
+connection is refused. The session cookie is `Secure` and HSTS is sent where the browser's leg is HTTPS, behind a
+trusted proxy by its `Forwarded`/`X-Forwarded-Proto`. Plain HTTP beyond the loopback is still served, and said
+loudly: in the log, below the banner, on the Configuration page and in `/api/v1/auth/me` for an administrator.
+Left: HSTS is sent on the web interface, not on the JSON API; the other CLIs read the `"web"` section, but take the
+switches only once they pass `NodeArguments.Web` to their node.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
-
-
-## High
-
-### S13. The hub serves its web interface, API and sign-in over plain HTTP only
-`design` · high · **open**
-
-- **Where:** `RoamingHub/RoamingHub/RoamingHub.cs:273-296` (no server certificate),
-  `WWCP_Node/WWCP_Node/WWCPNode.cs:943,1019` (`UseSecureCookies` only with HTTPS),
-  `CommandLine/NodeArguments.cs:183-187` (`--any`).
-- **Problem:** with `--any` (needed for OCPI peers) the login password, Basic-auth and API-key headers, and the
-  30-day session cookie (no `Secure` flag) all cross the network in clear text; whoever reads them can make the hub
-  sign as roaming network operator (parties, and since RoamingHub `10d8a56` the certificates of keyless bodies,
-  `HTTPAPI/RoamingHubHTTPAPI.POI.cs:233-285`).
-- **Fix:** serve the stored TLS identity with HSTS, or refuse/warn loudly when binding beyond loopback without TLS.
 
 
 ## Medium

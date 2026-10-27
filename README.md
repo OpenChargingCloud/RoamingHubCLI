@@ -113,10 +113,33 @@ counterpart directly.
 `dotnet run --project RoamingHubCLI -- --help` lists the rest: `--port`,
 `--any`, `--accounts <dir>`, `--frontend <dir>`, `--config <file>`,
 `--verbose`, `--quiet`, `--no-trace`, `--log-file <dir>`, `--no-log-file`,
-and the certificate store's `--certificates <dir>`,
+the certificate store's `--certificates <dir>`,
 `--import-certificate <kind>=<file>`, `--certificate-password <pw>` and
-`--list-certificates`. They are every node's switches, read by WWCP_Node, as
-is what the console says once the hub is up.
+`--list-certificates`, and HTTPS's `--https`, `--https-cert <file>`,
+`--https-key <file>`, `--redirect-port <number>` and `--trusted-proxy
+<address>`. They are every node's switches, read by WWCP_Node, as is what the
+console says once the hub is up.
+
+**`--any` puts the sign-in on the network.** The OCPI peers need the hub
+beyond the loopback, and with it come the password, the API keys and the
+session cookie - in the clear, unless the hub speaks HTTPS itself or a proxy
+in front of it does and is named as trusted, both in the `web` section of the
+configuration file (POI3-ISSUES.md S13). Behind nginx:
+
+```json
+"web": { "trustedProxies": [ "127.0.0.1", "::1" ] }
+```
+
+With certbot's files and no proxy:
+
+```json
+"web": { "tls": { "certificate": { "fullchain": "/etc/letsencrypt/live/hub.example.org/fullchain.pem",
+                                   "privateKey": "/etc/letsencrypt/live/hub.example.org/privkey.pem" },
+                  "redirectPort": 80 } }
+```
+
+Neither said, the hub warns in its log, below its banner and above every page
+of its web interface to its administrators. WWCP_Node's README says the rest.
 
 Beside the solution, then, a first start leaves `accounts/`, `ocpi/`, the
 certificate store `certificates/` and the log files in `logs/`;
