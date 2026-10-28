@@ -123,19 +123,19 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 - **Fix:** refuse non-public addresses for peer-supplied URLs unless the configuration allows them, and use uniform
   error text.
 
-### S20. Secrets and private keys at rest are world-readable by default; `traffic/` is not git-ignored
-`design` · medium · **open**
+### S20. Session tokens and API keys are stored raw
+`design` · low (was medium) · **fixed in part** in WWCP_Node `829896d`, RoamingHub `6824d54` (2026-10-28)
 
-- **Where:** `RoamingHub/RoamingHub/RoamingHub.RoamingNetworkOperator.cs:748-770` (RNO keys unencrypted PEM, no ACL on
-  Windows, chmod after write on Unix), `WWCP_Node` accounts/certificates/logs directories beside the repository root
-  (`Certificates/CertificateStore.cs:2674-2695`, `Logging/LogSigner.cs:237-253`: `Protect()` returns early on
-  Windows), session tokens and API keys stored raw, `.gitignore:309-311` (does not ignore `/traffic/`, which
-  `RoamingHub.OCPI.cs:263-281` fills when `ocpi.logging.toFile` is on, though the comment says "in memory only").
-- **Problem:** on Windows under a drive-root folder, Authenticated Users inherit read/modify, so any local user can
-  read the RNO identity key, session tokens or TLS keys; a `git add -A` would commit `traffic/` with CDRs, sessions
-  and token uids (credentials tokens are masked since RoamingHub `07aa584`).
-- **Fix:** create `accounts/`, `certificates/`, `logs/`, `ocpi/`, `traffic/` owner-only on every platform; store
-  tokens and API keys hashed; add `/traffic/` to `.gitignore`.
+- **Fixed:** `accounts/`, `logs/` (with `logs/metrological/` and its signing key), `certificates/`, `ssh/`,
+  `ocpi/`, `traffic/` and `roamingNetworkOperator/` (and its two private keys) are made, and taken back at every
+  start, as their owner's alone through `WWCP_Node/OwnerOnly.cs`: 0700/0600 on Unix, and on Windows a protected
+  access list for the running account, SYSTEM and the administrators, which what is in a directory inherits; where
+  a file system cannot say so the log warns. `/traffic/` is git-ignored in the superproject, and the hub's own
+  `.gitignore` names logs/, ssh/, roamingNetworkOperator/, poi/ and traffic/ as well.
+- **Left:** session tokens and API keys are stored raw in the accounts' file (Hermod's HTTPExt API); whoever can
+  read that file - now only the account itself, SYSTEM and the administrators - can use them.
+- **Fix:** store them hashed, with a migration of the existing accounts' files of every CLI; an API key can then be
+  shown once, when it is made.
 
 ### S31. A transparency software manufacturer can change a release after a conformity assessment body certified it
 `security` · medium · **open** (found 2026-10-24 at WWCP_POI `801bbce`, read from the code, no PoC)

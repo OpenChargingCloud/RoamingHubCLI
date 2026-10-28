@@ -305,10 +305,13 @@ known-servers.json
 # The peers this hub is peered with and the tokens exchanged with them: the
 # OCPI library's own files, kept beside the configuration, one set per OCPI
 # version. Records of this particular installation, not of the source.
-#
-# What went between those peers is not here and never will be: the traffic log
-# is in memory only - see libs/RoamingHub.
 /ocpi/
+
+# What went between those peers, where the configuration asks for it to be
+# kept beyond the run ("ocpi": { "logging": { "file": true } }): one file
+# per day, with the peers' sessions, CDRs and the uids of their tokens. A
+# record of this installation, and nobody else's business.
+/traffic/
 
 # The roaming network operator this hub is: made at the first start beside the
 # configuration, with the private halves of its signing key and its identity
