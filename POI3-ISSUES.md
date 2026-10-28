@@ -108,6 +108,16 @@ every non-public network (`DenyNonPublicNetworks`, IPv6 and NAT64 included). `Co
 every OCPI `CommonHTTPClient`; the hub sets it from `"ocpi": { "peerNetworks": [ … ] }` - the file's rules first, then
 the non-public networks denied, then the public internet. A refused URL is answered like one nobody answers at.
 
+**S27 fixed on 2026-10-28** (WWCP_Node `f08fdee`, RoamingHub `57c9351`): suspending a peer sets every token of the hub
+it holds to `BLOCKED` in the OCPI library, on every version it is peered on, all or none (`OCPIVersion.SetLocalAccess`);
+resuming sets them `ALLOWED`. The library refuses a blocked token on every route - versions, credentials and their
+renewal, hubclientinfo - and writes it to the peers' file, so a suspension the file cannot take is a 500 and changes
+nothing, and a start reads a party with blocked tokens as `SUSPENDED`; a party added while suspended gets a blocked
+token. An SSH session is asked again what let it in (`NodeSSHAuthenticator.WhyNoLongerIn`: the account there, not
+switched off, holding a role; the key still the account's, switched on and valid) before every command that needs a
+role and every `SSHSessionRecheckEvery` (5 s); where that fails, the session ends with its command and its log,
+"Signed out: …", exit status 1 and a line in the log.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
@@ -226,16 +236,6 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
   key of a withdrawal is checked at its signer-chosen `withdrawnAt` only, not also when the server takes it, as
   change sets are since `f2ae688`.
 - **Fix:** keep tombstones, require fresh signatures after a withdrawal, check the key when the withdrawal is taken.
-
-### S27. "Suspend" does not revoke a peer's access, and SSH sessions survive account changes
-`bug` · low · **open**
-
-- **Where:** `RoamingHub/RoamingHub/RoamingHub.HubClientInfo.cs:200-212` (suspend only changes presence; the token
-  stays ALLOWED); `WWCP_Node/WWCP_Node/CommandLine/NodeCLI.cs:171-192`, `WWCPNode.SSH.cs:595-694` (the account is
-  checked once per session).
-- **Problem:** a suspended peer still lists everyone and renews its credentials; an open SSH session keeps its rights
-  and log stream after its account is disabled or its key removed (web sessions are cut in the same case).
-- **Fix:** block a suspended peer's access token; re-check `CanAuthenticate` and the key before each SSH command/line.
 
 ### S29. Robustness and information leaks
 `bug` · low · **open**

@@ -12,8 +12,8 @@ CPO/EMSP/HUB HTTP API, see the comments at `OCPIv2_2_1.cs:98-110`, `OCPIv2_3_0.c
 `false` unless configured (`RoamingHub/RoamingHub.OCPI.cs:310`); the library default is `true`
 (`WWCP_OCPI_Common/HTTP/CommonHTTPAPI.cs:651`). Each finding says whether the hub is exposed.
 
-Related findings in [POI3-ISSUES.md](POI3-ISSUES.md): S27 (a suspended peer keeps its access); S19 (SSRF through the
-URLs a peer gives in the credentials handshake) and S28 (`peers:run` returned every peer's tokens) are fixed.
+Related findings in [POI3-ISSUES.md](POI3-ISSUES.md), all fixed: S19 (SSRF through the URLs a peer gives in the
+credentials handshake), S27 (a suspended peer kept its access) and S28 (`peers:run` returned every peer's tokens).
 
 **O1 fixed on 2026-10-28** (WWCP_OCPI `6da6aa86`, with `2cbf367f` restoring source maps it took along by mistake),
 as the maintainer chose: `TryRegister` and `TryPutCredentials` (2.1.1, 2.2.1, 2.3.0) take back the token they stored
