@@ -101,22 +101,18 @@ and minute, a client by its address (IPv6 by its /64), behind a trusted proxy th
 Left: a limit per client does not bound many clients at once, and a page next to a branch never merged still walks the
 commits beside it (only commits of servers allowed to push make such branches; the hub allows none).
 
+**S19 fixed on 2026-10-28** (Hermod `ca91a551`, WWCP_OCPI `19eb3be5`, RoamingHub `e9ca38c`), as the maintainer chose:
+`ATCPClient.RemoteNetworkAcl` checks every address a remote resolved to before one is dialled, none resolved again in
+between (DNS-rebinding safe); `NetworkAcl` reads `"10.0.0.0/8 => DENY"`, matches `::ffff:a.b.c.d` as IPv4 and denies
+every non-public network (`DenyNonPublicNetworks`, IPv6 and NAT64 included). `CommonHTTPAPI.RemoteNetworkAcl` reaches
+every OCPI `CommonHTTPClient`; the hub sets it from `"ocpi": { "peerNetworks": [ … ] }` - the file's rules first, then
+the non-public networks denied, then the public internet. A refused URL is answered like one nobody answers at.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
 
 ## Medium
-
-### S19. SSRF through URLs a peer supplies during the OCPI credentials handshake
-`design` · medium · **open**
-
-- **Where:** `WWCP_OCPI/WWCP_OCPIv2.2.1/Common/CommonAPI.cs:3238-3311` (used by
-  `RoamingHub/RoamingHub/OCPI/OCPIv2_2_1.cs`), no filtering hook in `RoamingHub/RoamingHub/RoamingHub.OCPI.cs`.
-- **Problem:** a holder of token A (or C via a PUT) makes the hub GET `credentials.url` and the version-details URL
-  through its DNS client with the peer's `Authorization` header; loopback, private and link-local addresses are not
-  filtered, and different error texts make a port/service oracle.
-- **Fix:** refuse non-public addresses for peer-supplied URLs unless the configuration allows them, and use uniform
-  error text.
 
 ### S20. Session tokens and API keys are stored raw
 `design` · low (was medium) · **fixed in part** in WWCP_Node `829896d`, RoamingHub `6824d54` (2026-10-28)
