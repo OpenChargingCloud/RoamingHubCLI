@@ -113,6 +113,21 @@ jobs:
           npm run typecheck:test
           npm test
 
+      # What every kind of node shares of the web interface - the pages the hub
+      # bundles as @node/... - and its own tests, against the WWCP_Node pinned
+      # here rather than whatever its own gate builds it with. The build above
+      # installs only the hub's node_modules; this one is installed here, from
+      # its own lock file, or happy-dom and lit-html are missing and most of
+      # its tests cannot even load.
+      - name: The node's web interface (type checks and its own tests)
+        if: matrix.leg == 'debian-13-container'
+        working-directory: libs/WWCP_Node/Frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run typecheck:test
+          npm test
+
       # The node below the hub: the configuration file, the log, the time
       # servers, the accounts' roles and the ports, which every one of these
       # programs has alike. libs/WWCP_Node has a gate of its own, but that one

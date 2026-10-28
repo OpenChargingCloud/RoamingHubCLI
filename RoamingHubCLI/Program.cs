@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014-2026 GraphDefined GmbH <achim.friedland@graphdefined.com>
  * This file is part of RoamingHub <https://github.com/OpenChargingCloud/RoamingHub>
  *
@@ -66,7 +66,11 @@ namespace cloud.charging.open.RoamingHub.CLI
                                 "effect at once. Who this hub is in OCPI is read once, at the start, and deliberately not " +
                                 "changeable while running: it is what every peer wrote into its credentials. The peers " +
                                $"themselves are not in the file: the OCPI library keeps them below {Hub.OCPIDirectoryName}/ " +
-                                "beside it, one set per OCPI version, and reads them back at every start.",
+                                "beside it, one set per OCPI version, and reads them back at every start. The roaming network " +
+                                "operator this hub is gets its signing key and its identity key at the first start, kept below " +
+                               $"{HubRoamingNetworkOperator.DirectoryName}/ beside the file - keep a copy of them somewhere safe; " +
+                               $"the file's \"{HubRoamingNetworkOperator.ConfigurationSection}\": {{\"@id\", \"name\"}} says who it is, " +
+                               $"read at that first start only. The roaming networks it serves are below {Hub.POIDirectoryName}/.",
 
             CertificateKinds:   Hub.CertificateKinds,
 
@@ -81,10 +85,12 @@ namespace cloud.charging.open.RoamingHub.CLI
                                   "envelope, how long it took - and served at /api/v1/traffic, with a stream beside it. " +
                                   "Reading it is its own permission, traffic:read, and not part of configuration:read: the " +
                                   "configuration is what this hub is, and the traffic is what its peers did through it. " +
-                                  "The hub role may read it and the viewer may not. It is in memory and nowhere else, and " +
-                                  "the bodies are left out unless the configuration file says ocpi.logging.payloads. A " +
-                                  "deployment that has to keep more should read the stream and put it where it keeps such " +
-                                  "things.",
+                                  "The hub role may read it and the viewer may not. It is in memory and nowhere else " +
+                                  "unless the configuration file says ocpi.logging.file, which appends every call to a " +
+                                  "file of its own, one per day, beside that file; the bodies are left out either way " +
+                                  "unless it says ocpi.logging.payloads. Both are off to begin with: how long a hub may " +
+                                  "keep its peers' business is a question with a different answer in every jurisdiction, " +
+                                  "and the operator answers it.",
                                   "  ", "  "),
 
                 "",
@@ -142,7 +148,8 @@ namespace cloud.charging.open.RoamingHub.CLI
                           ConsoleLogLevel:   arguments.ConsoleLogLevel,
                           LogPath:           arguments.LogPathBelow(root),
                           BridgeDebugLog:    !arguments.NoTrace,
-                          SSH:               arguments.SSH
+                          SSH:               arguments.SSH,
+                          Web:               arguments.Web
                       );
             }
             catch (Exception e)
@@ -177,8 +184,16 @@ namespace cloud.charging.open.RoamingHub.CLI
                                              ("OCPI party",      $"{hub.PartyIdText} ({hub.BusinessDetails.Name})"),
                                              ("OCPI versions",   $"{hub.OCPIVersionsURL} ({String.Join(", ", hub.OCPIVersions.Select(version => version.Label))})"),
                                              ("peers",           $"{hub.RemotePartyCount} peered, {hub.RegisteredPartyCount} of them registered, in {hub.OCPIDirectory}"),
-                                             ("calls kept",      $"the last {hub.Traffic.Capacity}, in memory only, " +
-                                                                 (hub.OCPI.Logging?.Payloads == true ? "bodies and all" : "without the bodies"))
+                                             ("calls kept",      $"the last {hub.Traffic.Capacity} " +
+                                                                 (hub.TrafficDirectory is not null
+                                                                      ? $"in memory, and all of them appended to {hub.TrafficDirectory}, "
+                                                                      : "in memory only, ") +
+                                                                 (hub.OCPI.Logging?.Payloads == true ? "bodies and all" : "without the bodies")),
+                                             ("RNO",             $"this hub is the roaming network operator '{hub.NetworkOperator.Id}'" +
+                                                                 (hub.NetworkOperator.IsNew ? ", made now" : "") +
+                                                                 $", its keys in {hub.NetworkOperator.Directory}; " +
+                                                                 $"{hub.POI.RoamingNetworks.Count(hub.NetworkOperator.Operates)} roaming network(s) operated"),
+                                             .. hub.DatexIIBannerLines()
                                          ]))
                     Console.WriteLine(line);
 

@@ -10,6 +10,7 @@ git pull --ff-only
 git submodule update --init --recursive
 git submodule foreach git checkout master
 git submodule foreach git pull
-npm --prefix /home/ahzf/RoamingHubCLI/libs/RoamingHub/RoamingHub/Frontend ci
+# No npm here: the build runs "npm ci" itself whenever the frontend's
+# package.json or package-lock.json changed (see libs/RoamingHub/RoamingHub/RoamingHub.csproj).
 #dotnet build RoamingHubCLI.slnx --configuration Release
 dotnet build RoamingHubCLI.slnx

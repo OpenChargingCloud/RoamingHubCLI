@@ -70,6 +70,17 @@ sign in. Signing in happens at Hermod's HTTPExt API, mounted under `/ext` - the
 same door the other components use, which is what lets one sign-in cover
 several of them when they share a server.
 
+**Recommended for the first start: give `root` your own SSH key** with it, so
+that you can type at the hub over SSH from the start - see
+[Typing at it over SSH](#typing-at-it-over-ssh):
+
+```
+dotnet run --project RoamingHubCLI -- --authorize-ssh-key root=C:\Users\you\.ssh\id_ed25519.pub
+```
+
+Without it, the first start makes up a key pair for `root` and prints its
+private key once, below the password.
+
 What it opens on is the traffic, and that is the whole difference from the
 other components: they open on their configuration, because that is what
 somebody sets up once and then leaves alone. A hub is set up once and
@@ -102,10 +113,33 @@ counterpart directly.
 `dotnet run --project RoamingHubCLI -- --help` lists the rest: `--port`,
 `--any`, `--accounts <dir>`, `--frontend <dir>`, `--config <file>`,
 `--verbose`, `--quiet`, `--no-trace`, `--log-file <dir>`, `--no-log-file`,
-and the certificate store's `--certificates <dir>`,
+the certificate store's `--certificates <dir>`,
 `--import-certificate <kind>=<file>`, `--certificate-password <pw>` and
-`--list-certificates`. They are every node's switches, read by WWCP_Node, as
-is what the console says once the hub is up.
+`--list-certificates`, and HTTPS's `--https`, `--https-cert <file>`,
+`--https-key <file>`, `--redirect-port <number>` and `--trusted-proxy
+<address>`. They are every node's switches, read by WWCP_Node, as is what the
+console says once the hub is up.
+
+**`--any` puts the sign-in on the network.** The OCPI peers need the hub
+beyond the loopback, and with it come the password, the API keys and the
+session cookie - in the clear, unless the hub speaks HTTPS itself or a proxy
+in front of it does and is named as trusted, both in the `web` section of the
+configuration file (POI3-ISSUES.md S13). Behind nginx:
+
+```json
+"web": { "trustedProxies": [ "127.0.0.1", "::1" ] }
+```
+
+With certbot's files and no proxy:
+
+```json
+"web": { "tls": { "certificate": { "fullchain": "/etc/letsencrypt/live/hub.example.org/fullchain.pem",
+                                   "privateKey": "/etc/letsencrypt/live/hub.example.org/privkey.pem" },
+                  "redirectPort": 80 } }
+```
+
+Neither said, the hub warns in its log, below its banner and above every page
+of its web interface to its administrators. WWCP_Node's README says the rest.
 
 Beside the solution, then, a first start leaves `accounts/`, `ocpi/`, the
 certificate store `certificates/` and the log files in `logs/`;
@@ -136,7 +170,9 @@ either. It is [WWCP_Node](https://github.com/OpenChargingCloud/WWCP_Node)'s,
 and its README says how a chain is checked.
 
 What the peers did through the hub is in neither: the
-[traffic](#the-traffic-which-is-the-point-of-a-hub) stays in memory.
+[traffic](#the-traffic-which-is-the-point-of-a-hub) stays in memory, unless
+`ocpi.logging.file` says otherwise - then it is appended to `traffic/` beside
+the configuration as well.
 
 
 ### Typing at it
@@ -219,17 +255,49 @@ loopback, or every address with `--any`. Nothing else is: no shell of the
 machine, no files, no tunnels. `--ssh-port` moves it, `--no-ssh` switches it
 off.
 
+The web interface has it under **Configuration → SSH server**: whether it
+runs, on which address and port, its host key with the fingerprint and the
+`known_hosts` line, who is connected and the keys of the accounts. Whoever may
+edit it - an administrator, as neither the viewer nor the hub role may - switches
+it on and off, moves its port and lets passwords in there, in effect at once;
+where a switch on the command line says otherwise, the switch wins and the page
+says so.
+
 Whoever signs in is an account of the roaming hub, under its name, with a key
-of its own. The first start makes `root`; give it your public key once:
+of its own. The first start makes `root`; give it your public key with that
+very start - the way recommended:
 
 ```
 dotnet run --project RoamingHubCLI -- --authorize-ssh-key root=C:\Users\you\.ssh\id_ed25519.pub
 ```
 
+The private key then stays on your machine, and no console ever shows it.
+A first start without `--authorize-ssh-key root=...` makes up a key pair for
+`root` instead and prints its private key once, below the password in the
+first-start box: save the lines from `-----BEGIN OPENSSH PRIVATE KEY-----` to
+the END line as a file only you can read, and sign in with
+`ssh -i <file> -p 22356 root@127.0.0.1`, or import the file in PuTTYgen for
+PuTTY. Like the password it is kept nowhere - but a console may be kept, by a
+service's journal or a redirected output; replace it with your own key and
+take it out. `--authorize-ssh-key` also works at any later start.
+
 An OpenSSH `.pub` goes in as it is, and so does what PuTTYgen saves with *Save
-public key*. The key is kept in `accounts/ssh/root`, a file in the format of
-`authorized_keys`, and putting a line into it by hand does the same; taking one
-out locks that key out at once. Then:
+public key*. The key is kept with the account, beside its password, and the
+`sshKeys` command manages it - at the console, or over SSH for the account
+signed in:
+
+```
+sshKeys root
+sshKeys root add ssh-ed25519 AAAA... you@laptop
+sshKeys root remove SHA256:abc
+```
+
+`remove` takes the fingerprint `sshKeys` lists, or enough of its beginning, and
+locks that key out at once. `apiKeys` does the same for the account's API keys,
+and shows a new one once, when it is made. In the web interface, the name at
+the foot of the menu opens the account's own page: its details, and its API
+keys and SSH keys to add, switch off and on, and remove - for every account,
+whatever its roles. Then:
 
 ```
 ssh -p 22356 root@127.0.0.1
@@ -277,14 +345,100 @@ part of `configuration:read`: the configuration is what this hub is, and the
 traffic is what its peers did through it.
 
 
+### The points of interest
+
+The hub serves roaming networks of [POI 3](libs/WWCP_POI) below `/poi`: their
+charging station operators with their charging pools, stations and EVSEs, to
+query and to synchronise, readable by everybody without signing in. `/poi/RNs`
+in a browser is the **Points of interest** page; the same URL asked for JSON is
+the list. Each network is a directory below `poi/` beside the configuration
+file, read back at every start.
+
+The hub is a **roaming network operator**, its RNO: at the first start it
+makes a signing key and an identity key and keeps them below
+`roamingNetworkOperator/` beside the configuration file - keep a copy of that
+directory somewhere nobody else can read it, as without the identity key
+nobody can ever replace the keys of the networks the hub operates. A fresh hub
+serves no roaming network:
+
+```
+RoamingHub> roamingNetworkOperator
+This hub is the roaming network operator 'RNO-103B0540', since 2026-10-17T13:38:51.443Z.
+  signing key   784c5f9e...  pAECIAEh...
+  identity key  103b0540...  pAECIAMh...
+  its private keys are kept in '...\roamingNetworkOperator'
+  it operates no roaming network yet: 'roamingNetworks add <id> [<name>]' makes one
+```
+
+Its identification is `RNO-` and eight hex digits of its identity key, unless
+the configuration file says `"roamingNetworkOperator": {"@id": "GraphDefined",
+"name": "GraphDefined GmbH"}` before the first start. A new roaming network is
+made with nothing but a name, operated by the hub; then the hub adds its first
+charging station operator, with the public halves of the operator's keys - the
+operator keeps the private ones. Below the list on the **Points of interest**
+page, at the prompt, or over SSH:
+
+```
+RoamingHub> roamingNetworks add QA Quality assurance
+The roaming network 'QA' was made, at revision 0, commit 4d99ddd0..., operated by this hub, 'RNO-103B0540'. Its parties are added now, with change sets this hub signs.
+RoamingHub> roamingNetworks QA add chargingStationOperator DE*QAC signingKey pAECIAEh... identityKey pAECIAMh... QA Charging
+The ChargingStationOperator 'DE*QAC' is added to the roaming network 'QA' once it signed the change set '7c1e29f0...' with each of its identity keys, as the proof that it holds them: POST /poi/RNs/QA/history/changeSets/pending/7c1e29f0.../signatures. Signed by this hub, it waits until then.
+Change 0: Add of the ChargingStationOperator 'DE*QAC' needs a signature by the new identity key '62756187...' of the ChargingStationOperator 'DE*QAC', as the proof that it holds it!
+```
+
+The operator signs the change set with its identity keys - `GET
+/poi/RNs/QA/history/changeSets/pending/{changeSetId}` gives it - and sends the
+signatures; then it is a member, and adds its data with change sets it signs.
+The manufacturers its charging stations and energy meters name come first:
+parties as well, each added with its keys, which state their models themselves,
+so that the stations and meters can name them:
+
+```
+RoamingHub> roamingNetworks QA add chargingStationManufacturer GraphDefined signingKey pAECIAEh... identityKey pAECIAMh... homepage https://stations.graphdefined.example GraphDefined Charging Stations
+The ChargingStationManufacturer 'GraphDefined' is added to the roaming network 'QA' once it signed the change set '...' with each of its identity keys, as the proof that it holds them: POST /poi/RNs/QA/history/changeSets/pending/.../signatures. Signed by this hub, it waits until then.
+Change 0: Add of the ChargingStationManufacturer 'GraphDefined' needs a signature by the new identity key '...' of the ChargingStationManufacturer 'GraphDefined', as the proof that it holds it!
+```
+
+or `POST /api/v1/poi/RNs` with `{"@id", "name"}` and
+`POST /api/v1/poi/RNs/QA/CSOs` with `{"@id", "name", "signingKeys",
+"identityKeys"}` - below `/api/v1` the paths the POI API serves them at below
+`/poi` - each key the Base64 of its COSE key or a key as POI writes it; a
+manufacturer `POST /api/v1/poi/RNs/QA/CSMs` (or `EMMs`) the same way, with
+`"homepage"` if it likes.
+`roamingNetworks` alone lists them, with their revisions, `roamingNetworks QA`
+one with its parties and their keys. Both are
+`poi:edit`, an administrator's, and signed by the hub; so is every commit the
+hub makes of a network it operates.
+
+`roamingNetworkOperator rotate signingKey` (or `identityKey`) replaces a key of
+the hub by a new one in every roaming network it operates, each change signed
+by the key it replaces, and forgets the old one once no network names it any
+more; `roamingNetworkOperator name GraphDefined GmbH` renames it in all of
+them. Both are `poi:edit` as well.
+
+Everything else in it comes as change sets its owners sign - the operator adds
+its charging pools - submitted by anybody to
+`COMMIT /poi/RNs/{id}/history/changeSets` or over the network's WebSocket: what
+a change set may change is for its signatures to say, not for who sent it.
+Every commit is in the log, tagged `poi` and `commit`.
+[libs/WWCP_POI/examples](libs/WWCP_POI/examples/README.md) goes through it step
+by step, at the prompt or over SSH, in the web interface, over HTTP and in C#:
+[example 1](libs/WWCP_POI/examples/example1.md) the first start and the roaming
+network `QA`, [example 2](libs/WWCP_POI/examples/example2.md) the charging
+station operator `DE*GEF` added to it, and
+[example 3](libs/WWCP_POI/examples/example3.md) its two pools of a DC and an AC
+station each, their power and connectors from templates of their current, and
+the stations and the EVSEs grouped by their current.
+
+
 ### Who may do what
 
 Three roles, and the accounts' groups are what gives them: `viewer` may look
 at the hub and at who is on it and do nothing, and may not read the traffic;
 `hub` runs it from day to day - the name servers and the time servers, and the
 traffic; `systemadmin` may do everything, and is the only one who lets a peer
-in or changes what the hub believes, and nothing but the hub says what it may
-do. The `roles` section of `configuration.json` adds roles, or says
+in, changes what the hub believes or makes a roaming network, and nothing but
+the hub says what it may do. The `roles` section of `configuration.json` adds roles, or says
 differently what `viewer` or `hub` may do:
 
 ```json
@@ -305,7 +459,8 @@ a **tlsRoot** says which time server and which name server over TLS or HTTPS
 may be believed, beside the roots of the machine, and a **tlsServer** is a
 server's own certificate, kept so that the server can be held to it by its
 fingerprint. Both are told what they are for - `nts`, `dns` or both. A
-**clientRoot** and a **tlsIdentity** are kept, and used by nothing here yet.
+**clientRoot** and a **tlsIdentity** are kept, and used by nothing here yet;
+the identity, as everything with a private key, on the **Identities** page.
 
 ```
 dotnet run --project RoamingHubCLI -- --import-certificate tlsRoot=our-time-servers-root.pem --list-certificates
@@ -343,6 +498,7 @@ server is held to none.
 | `libs/RoamingHub/RoamingHubTests/` | what a hub does when a peer, or a stranger, talks to it |
 | `libs/WWCP_Node/` | what the hub is before it is a hub: the log, the configuration file, name resolution and the time, the certificate store, the accounts and their roles, and the web server |
 | `libs/WWCP_OCPI/` | the protocol: OCPI 2.2.1 and 2.3.0 |
+| `libs/WWCP_POI/` | the points of interest: POI 3, its roaming networks, their change sets, history and sync |
 
 The command line is this program's vocabulary and nothing else - the switches
 at a start and the commands at the prompt. What a roaming hub *is*, and what
