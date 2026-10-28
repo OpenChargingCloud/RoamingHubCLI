@@ -32,7 +32,7 @@ they are taken out of this list:
 | S34 RNO-stated certificates look like the body's | `65e658d` (csharp-review 15) | `"statedBy": "roamingNetworkOperator"`; the hub sets it since RoamingHub `397e478` |
 | S35 a meter's certificate is not tied to the model | `987fa26`, `7e0b0ac` (csharp-review 16, 17) | a certificate is for one model, its revisions and firmware versions, and is checked against each station and meter naming it |
 
-S5, S11, S12 and S26 are fixed in part; what is left is said in each. The others still hold. Lines given for
+S5, S11 and S26 are fixed in part; what is left is said in each. The others still hold. Lines given for
 `5a03f14` were checked again; the rest are those of the commits of 2026-10-24.
 
 **Decided and fixed on 2026-10-27** at WWCP_POI `ff2c56f` (super `ac1d46e`), as the maintainer chose:
@@ -87,28 +87,25 @@ as the roaming network does (`DE*GEF*E11` for `DE*GEF*E1*1` is refused); a seque
 (`MaxPendingPriceStatementsPerOperator`, 100,000), an operator stating more drops its own oldest only; a checkpoint
 naming two statements of one entity and sequence with different digests is refused. SPECIFICATION.md 12.1-12.3.
 
+**S12 fixed on 2026-10-28** (WWCP_POI `d184feb`, RoamingHub `106184f`; before, in part, WWCP_POI `33447ac`): no
+public reader takes `historyLock` (the read view). A page of commits costs about what it returns: each commit of the view
+keeps how many of the first commits it is or follows, and only the commits after those are walked, so a `have` naming
+the root alone, `GET commits` without `since` and a server catching up page by page no longer walk the whole history
+for every page (`CommitsLookedAt`; `MissingCommitsTests`). `have` is capped (`MaxHaveIds`, 1,000), also over several
+`have=` parameters, which count together. The 16 views without parts kept per version are the ones asked for last, so
+nobody takes the slots first. Snapshots of the head and of checkpoints, pages of commits and of their metadata,
+archive segments and views without parts not kept are heavy reads: at most `MaxHeavyReadsPerMinute` (600) per client
+and minute, a client by its address (IPv6 by its /64), behind a trusted proxy the one it names (the hub hands
+`ClientAddressOf` on); beyond, 429 with `Retry-After` over HTTP, a wait of up to `MaxHeavyReadWait` (10 s) and then
+`GenericError` over the WebSocket. WebSocket batches, list limits and `match` bounds as before. SPECIFICATION.md 5.5.
+Left: a limit per client does not bound many clients at once, and a page next to a branch never merged still walks the
+commits beside it (only commits of servers allowed to push make such branches; the hub allows none).
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
 
 ## Medium
-
-### S12. Public, unauthenticated reads can still cost CPU without bound
-`security` · medium (was high) · **fixed in part** in WWCP_POI `33447ac` (super `83ec538`, 2026-10-27)
-
-- **Fixed:** no public reader takes `historyLock` any more: the tips, `TryGetCommitProof`, checkpoint snapshots, the
-  pending change sets (their co-signing checks cached until the tips or checkpoints change) and the archive reads come
-  from the read view (`History/RoamingNetworkHistory.ReadView.cs`). `have` is capped (`POI_API.MaxHaveIds`, 1,000),
-  deduplicated and walked back from the tips, newest revision first, instead of O(K·N); an honest peer names about 25
-  ids. WebSocket batches only for actions that change something or set a status, their answers within
-  `POIWebSocketServer.MaxBatchResponseBytes` (4 MiB), the rest skipped once the connection closes. `?without=` views
-  kept up to `POI_API.MaxOmissionViews` (16) per version. List `limit` at most `MaxListLimit` (1,000), `match` at most
-  256 characters and 16 words. SPECIFICATION.md section 5.5.
-- **Left:** a `?without=` view beyond the 16 kept is serialized for every request, and an attacker can take the 16
-  slots of the head version first; a `have` naming only the root and `GET commits` without `since` still walk the
-  whole history (O(N log N) per page, as before); nothing limits how many requests, snapshots or large checkpoint
-  snapshots arrive at once (no rate limit); over HTTP only the last of repeated `have=` parameters counts.
-- **Fix:** an LRU or a cost budget for `?without=`, a rate limit per client for the heavy reads.
 
 ### S19. SSRF through URLs a peer supplies during the OCPI credentials handshake
 `design` · medium · **open**
