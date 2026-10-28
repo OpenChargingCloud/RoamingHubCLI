@@ -69,6 +69,13 @@ else 403. Every request below `/ext` that is no read refuses cross-site requests
 Origin), in one pipeline of the node. The node has no WebSocket of its own; its log and event streams are read-only
 SSE.
 
+**S21 fixed on 2026-10-28** (WWCP_Node `54d25a3`, RoamingHub `24523a8`): every entry of the event log, and every
+complaint on stderr, is one line: CR, LF, tab, other control characters, U+2028/U+2029 and the bidirectional marks
+are written out (`\r`, `\n`, `\t`, `\uXXXX`) in `EventLog.Write`, so for every sink at once, and a message is cut
+at 4096 characters with the number left out. Failed SSH sign-ins are counted per connection and said once, at Info,
+when it closes (each attempt at Debug). The OCPI traffic log passes its one-line fields through `EventLog.OneLine`;
+bodies stay as they came.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
@@ -129,18 +136,6 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
   and token uids (credentials tokens are masked since RoamingHub `07aa584`).
 - **Fix:** create `accounts/`, `certificates/`, `logs/`, `ocpi/`, `traffic/` owner-only on every platform; store
   tokens and API keys hashed; add `/traffic/` to `.gitignore`.
-
-### S21. Unauthenticated input is written raw into every log sink (log injection, memory growth)
-`security` · medium · **open**
-
-- **Where:** `WWCP_Node/WWCP_Node/WWCPNode.SSH.cs:752-763` with `Hermod/Hermod/SSH/Auth/UserAuthentication.cs:172-174`
-  (raw username/method of every failed SSH attempt), `WWCP_Node` `Logging/ConsoleLog.cs:150`, `Logging/FileLog.cs:246`
-  (no escaping); also change-set descriptions (`RoamingHub.POI.cs:283-287`) and OCPI status messages
-  (`OCPI/OCPIv2_2_1.cs:167`, `RoamingHub.Traffic.cs:118`: tokens masked, control characters not).
-- **Problem:** CR/LF forge log lines and ESC/OSC sequences reach the operator's terminal; SSH is on by default and
-  each attempt carries up to ~256 KiB, and the event log/stream buffers grow.
-- **Fix:** escape CR, LF and C0/C1 control characters and cap peer-supplied strings centrally in the log writers;
-  aggregate failed sign-in lines.
 
 ### S31. A transparency software manufacturer can change a release after a conformity assessment body certified it
 `security` · medium · **open** (found 2026-10-24 at WWCP_POI `801bbce`, read from the code, no PoC)
