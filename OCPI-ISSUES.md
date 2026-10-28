@@ -22,32 +22,19 @@ credentials. Where it was sent and no answer came (no response, Hermod's ClientE
 `LocalAccessInfo.Pending` (`"pending": true` in the file), and the next `TryRegister` without a token of its own
 sends it again, after a restart as well. A renewal answered with other roles is left to O5.
 
+**O2 fixed on 2026-10-28** (WWCP_OCPI `0b7483b6`): `AddOCPIMethod` of 2.1.1, 2.2.1, 2.3.0 and 3.0 refuses a request
+whose token is of nobody here, or whose TOTP is not its party's, with 401 and why before the route is asked
+(`OCPIRequest.IsRefusedBeforeTheRoute`, `TokenRefused`); 2.1.1's `TryGetRemoteParties` now says why it found none.
+`LocationsAsOpenData` no longer drops "Unknown access token!" for every route: a route of open data says so
+(`OpenData`) - GET locations and tariffs of the CPO, EMSP and HUB APIs, with `LocationsAsOpenData`/`TariffsAsOpenData` -
+and takes an unknown token as no token, never a wrong TOTP. The shared `/versions` refuses an unknown token with 401
+whatever the open data, and a token its table blocks with 401 and "Invalid or blocked access token!" (was 200). The
+hub's `versions/2.2.1` answers a stale token 401.
+
 Items marked **needs a design decision** wait on the maintainer. Severity as in POI3-ISSUES.md.
 
 
 ## Medium
-
-### O2. 2.1.1, 2.2.1 and 3.0 do not refuse token errors before the route; open data turns them off everywhere
-`security` · medium · **open** · hub exposed (2.2.1 version details)
-
-- **Where:** refused before the route only in 2.3.0 (`WWCP_OCPIv2.3.0/IO/OCPIRequest.cs:147-170`) and the shared
-  `/versions` (`WWCP_OCPI_Common/IO/OCPIRequest.cs:148-170`); straight to the handler in 2.2.1
-  (`WWCP_OCPIv2.2.1/IO/OCPIRequest.cs:146-149`), 3.0 (`WWCP_OCPIv3.0/IO/OCPIRequest.cs:195-198`) and 2.1.1
-  (`WWCP_OCPIv2.1.1/IO/OCPIRequest.cs:145-148`). 2.1.1 collects no token error at all (`TryGetRemoteParties`,
-  `WWCP_OCPIv2.1.1/Common/CommonAPI.cs:7062-7108`, has no error out; `IO/OCPIRequest.cs:432-456`). With
-  `LocationsAsOpenData` "Unknown access token!" is dropped for every route (2.2.1 `IO/OCPIRequest.cs:635-636`, 2.3.0
-  `:664-665`, 3.0 `:703-704`, Common `:619-620`).
-- **Problem:** an unknown token or a wrong TOTP just makes the request anonymous, and every route has to say no
-  itself. Version details are served to such a caller in 2.1.1 (`Common/CommonAPI.cs:2297`), 2.2.1 (`:2397`) and 3.0
-  (`:2040`), where 2.3.0 and `/versions` answer 401. GET credentials and the changing credentials routes do refuse
-  (`LocalAccessInfo` null or not `ALLOWED`). With open data on, an unknown token also passes `/versions` and the 2.3.0
-  version details, though the switch is meant for locations and tariffs.
-- **Impact:** little leaks (the endpoint list a caller without a token gets too), but a peer with a broken TOTP or a
-  stale token is answered 1000 at the hub's `versions/2.2.1` and sees success; each route that forgets its own check
-  is open to unknown tokens.
-- **Fix:** take 2.3.0's check into 2.2.1's and 3.0's `AddOCPIMethod`; give 2.1.1's `TryGetRemoteParties` an error out
-  (unknown token, invalid TOTP) and the same check; replace the global open-data drop by a per-route opt-in set only
-  on GET locations and tariffs (OCPI asks for 401 on an unknown token).
 
 ### O3. OCPI 3.0 has no parties of its own and is unknown to the shared versions API
 `bug` · medium · **open** · hub not exposed (no 3.0)
