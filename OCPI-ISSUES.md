@@ -13,30 +13,19 @@ CPO/EMSP/HUB HTTP API, see the comments at `OCPIv2_2_1.cs:98-110`, `OCPIv2_3_0.c
 (`WWCP_OCPI_Common/HTTP/CommonHTTPAPI.cs:651`). Each finding says whether the hub is exposed.
 
 Related findings in [POI3-ISSUES.md](POI3-ISSUES.md): S19 (SSRF through the URLs a peer gives in the credentials
-handshake), S27 (a suspended peer keeps its access) and S28 (`peers:run` returns every peer's tokens).
+handshake), S27 (a suspended peer keeps its access); S28 (`peers:run` returned every peer's tokens) is fixed.
+
+**O1 fixed on 2026-10-28** (WWCP_OCPI `6da6aa86`, with `2cbf367f` restoring source maps it took along by mistake),
+as the maintainer chose: `TryRegister` and `TryPutCredentials` (2.1.1, 2.2.1, 2.3.0) take back the token they stored
+before sending where the attempt definitely failed - nothing was sent, or the other side answered without
+credentials. Where it was sent and no answer came (no response, Hermod's ClientError, 408, 502, 504) it stays, marked
+`LocalAccessInfo.Pending` (`"pending": true` in the file), and the next `TryRegister` without a token of its own
+sends it again, after a restart as well. A renewal answered with other roles is left to O5.
 
 Items marked **needs a design decision** wait on the maintainer. Severity as in POI3-ISSUES.md.
 
 
 ## Medium
-
-### O1. Every failed registration leaves one more token of ours valid for the peer
-`security` · medium · **open; needs a design decision** · hub exposed
-
-- **Where:** `WWCP_OCPIv2.2.1/Common/CommonHTTPClient.cs:2219` (`CredentialTokenB ?? AccessToken.NewRandom()`, a new
-  token for every call), `:2254` (stored before it is sent), `:2600-2630` (`StoreCredentialTokenB` adds it beside the
-  local tokens already there); the same in 2.3.0 (`:2212`) and in `TryPutCredentials` (2.2.1 `:1701`, 2.3.0 `:1695`,
-  2.1.1 `:1661`). The hub registers without a token B (`RoamingHub/OCPI/OCPIv2_2_1.cs:281-287`,
-  `OCPIv2_3_0.cs:389`).
-- **Problem:** that a failed renewal leaves the new token valid beside the old one was decided on 2026-10-02 (the
-  other side may have taken it). But only the success path replaces the local tokens; every failure (no answer, an
-  error answer, a roles mismatch) leaves the pre-stored token `ALLOWED`, and as the hub mints a new one per attempt,
-  each failed press of *Register* adds one more, in the file of the remote parties and for good.
-- **Impact:** a peer gains a growing set of valid tokens; one sent to a wrong or hijacked versions URL (see S19) works
-  as the peer's from then on.
-- **Fix:** on a definite failure (an error answer, a roles mismatch, nothing sent) withdraw the pre-stored token;
-  keep it only where the other side may have taken it (a timeout or a transport error after sending). And let
-  `TryRegister` reuse the one pending token B of a party rather than mint a new one per call.
 
 ### O2. 2.1.1, 2.2.1 and 3.0 do not refuse token errors before the route; open data turns them off everywhere
 `security` · medium · **open** · hub exposed (2.2.1 version details)

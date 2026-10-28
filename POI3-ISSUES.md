@@ -76,6 +76,10 @@ at 4096 characters with the number left out. Failed SSH sign-ins are counted per
 when it closes (each attempt at Debug). The OCPI traffic log passes its one-line fields through `EventLog.OneLine`;
 bodies stay as they came.
 
+**S28 fixed on 2026-10-28** (RoamingHub `f94ad39`): the answer of `POST /api/v1/ocpi/partners/{version}/{id}/register`
+carries the peers' tokens only where the account may edit the peers, as `GET /api/v1/ocpi/partners` does; a role with
+`peers:read` and `peers:run` gets them without (`HubAccessTests.WhoMayRunTheHandshakeIsNotHandedTheTokens`).
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
@@ -245,15 +249,6 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 - **Problem:** a suspended peer still lists everyone and renews its credentials; an open SSH session keeps its rights
   and log stream after its account is disabled or its key removed (web sessions are cut in the same case).
 - **Fix:** block a suspended peer's access token; re-check `CanAuthenticate` and the key before each SSH command/line.
-
-### S28. `peers:run` returns every peer's tokens on registration
-`bug` · low · **open**
-
-- **Where:** `RoamingHub/RoamingHub/HTTPAPI/RoamingHubHTTPAPI.OCPI.cs:184,202` (authorizes `Run(Peers)` but answers
-  `RemotePartiesJSON(IncludeSecrets: true)`).
-- **Problem:** the README gives tokens only to `peers:edit`, but a role with `peers:read` + `peers:run` gets every
-  token by pressing Register.
-- **Fix:** `IncludeSecrets: IsAllowed(user, Peers, Edit)`.
 
 ### S29. Robustness and information leaks
 `bug` · low · **open**
