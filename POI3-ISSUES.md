@@ -118,25 +118,23 @@ switched off, holding a role; the key still the account's, switched on and valid
 role and every `SSHSessionRecheckEvery` (5 s); where that fails, the session ends with its command and its log,
 "Signed out: …", exit status 1 and a line in the log.
 
+**S20 fixed on 2026-10-28** (Hermod `0fff6c9c`, WWCP_Node `9031bcf`, RoamingHub `1869910`; before, in part, WWCP_Node
+`829896d`, RoamingHub `6824d54`): `accounts/`, `logs/`, `certificates/`, `ssh/`, `ocpi/`, `traffic/` and
+`roamingNetworkOperator/` are their owner's alone (`WWCP_Node/OwnerOnly.cs`). The HTTPExt API keeps an API key, in
+memory and in its database file, under the SHA-256 of the key (`APIKey_Id.Of`, Base64url), with its first six
+characters as its hint, and finds a key presented by its hash; `AddAPIKey` takes only a key as `APIKey.AsKept()` makes
+it, and `ADD .../APIKeys` the key itself as `"@id"`, answering with the kept form. A session is kept, in memory and in
+its file, by the SHA-256 of its token (`Session.TokenHash`); the token itself is on the session `Create` returns alone,
+for the cookie. Whoever reads those files can not sign in with what is there. A key is shown once, when it is made -
+by `apiKeys add` and on the account page - and named by its hint and the beginning of its hash in lists and the log
+(`alices... #41WyMKor`). There is no migration, as the maintainer chose: nothing runs in production yet, and an old
+raw entry matches no key and no token.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
 
 ## Medium
-
-### S20. Session tokens and API keys are stored raw
-`design` · low (was medium) · **fixed in part** in WWCP_Node `829896d`, RoamingHub `6824d54` (2026-10-28)
-
-- **Fixed:** `accounts/`, `logs/` (with `logs/metrological/` and its signing key), `certificates/`, `ssh/`,
-  `ocpi/`, `traffic/` and `roamingNetworkOperator/` (and its two private keys) are made, and taken back at every
-  start, as their owner's alone through `WWCP_Node/OwnerOnly.cs`: 0700/0600 on Unix, and on Windows a protected
-  access list for the running account, SYSTEM and the administrators, which what is in a directory inherits; where
-  a file system cannot say so the log warns. `/traffic/` is git-ignored in the superproject, and the hub's own
-  `.gitignore` names logs/, ssh/, roamingNetworkOperator/, poi/ and traffic/ as well.
-- **Left:** session tokens and API keys are stored raw in the accounts' file (Hermod's HTTPExt API); whoever can
-  read that file - now only the account itself, SYSTEM and the administrators - can use them.
-- **Fix:** store them hashed, with a migration of the existing accounts' files of every CLI; an API key can then be
-  shown once, when it is made.
 
 ### S31. A transparency software manufacturer can change a release after a conformity assessment body certified it
 `security` · medium · **open** (found 2026-10-24 at WWCP_POI `801bbce`, read from the code, no PoC)
