@@ -80,6 +80,13 @@ bodies stay as they came.
 carries the peers' tokens only where the account may edit the peers, as `GET /api/v1/ocpi/partners` does; a role with
 `peers:read` and `peers:run` gets them without (`HubAccessTests.WhoMayRunTheHandshakeIsNotHandedTheTokens`).
 
+**S17 fixed on 2026-10-28** (WWCP_POI `4680d99`): the chain of price statements of an entity is keyed by the entity -
+`RoamingNetworkHistory.ChainOf`, its identification without `*`, whitespace and case - and a statement has to name it
+as the roaming network does (`DE*GEF*E11` for `DE*GEF*E1*1` is refused); a sequence is at most 2^53 − 1 and at most
+1,000,000 beyond the current one; the statements for the next checkpoint are bounded per operator
+(`MaxPendingPriceStatementsPerOperator`, 100,000), an operator stating more drops its own oldest only; a checkpoint
+naming two statements of one entity and sequence with different digests is refused. SPECIFICATION.md 12.1-12.3.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
@@ -102,19 +109,6 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
   whole history (O(N log N) per page, as before); nothing limits how many requests, snapshots or large checkpoint
   snapshots arrive at once (no rate limit); over HTTP only the last of repeated `have=` parameters counts.
 - **Fix:** an LRU or a cost budget for `?without=`, a rate limit per client for the heavy reads.
-
-### S17. Price-statement chains are keyed by raw entity text, and storage is unbounded per operator
-`bug` · medium · **open**
-
-- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.PriceStatements.cs:78,586,603-613,659-667,917`,
-  `API/POI_API.PriceStatements.cs:219-237` (no authorization beyond the operator's signature).
-- **Problem:** the current statement is keyed by the raw `entityId` text, but EVSE ids compare equal ignoring `*`,
-  suffix case and whitespace. "DE*GEF*E1*1" and "DE*GEF*E11" are taken as two chains of one EVSE, so a split view
-  goes unnoticed; spellings are unlimited, so are chains and dictionary entries. One operator posting >100,000
-  statements between checkpoints evicts others' statements from the checkpoint (lost §12.4 evidence); a sequence of
-  2^64−1 ends a chain for good.
-- **Fix:** key chains by the canonical typed id and refuse a non-canonical `entityId`; per-operator quotas, no
-  cross-operator eviction, bound sequence jumps with checked arithmetic.
 
 ### S19. SSRF through URLs a peer supplies during the OCPI credentials handshake
 `design` · medium · **open**
