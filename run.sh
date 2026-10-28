@@ -10,4 +10,4 @@ set -e
 
 cd "$(dirname "$0")"
 
-dotnet run --project RoamingHubCLI -- "$@"
+dotnet run --no-build --no-restore --project RoamingHubCLI -- "$@"
