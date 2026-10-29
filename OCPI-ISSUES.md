@@ -50,26 +50,23 @@ credentials answers 3000 saying so where there is no party of its own, as POST/P
 with at least one and never loses it, so O4's test of a registration without parties is gone. The constructor's
 `LocationsAsOpenData` stays unused (the base API's switch counts); `VersionsListTests`.
 
+**O5 fixed on 2026-10-29** (WWCP_OCPI `1292e3ea`): a renewal the other side accepted with other roles than it holds
+here (2.2.1, 2.3.0), or as another party than it is here (2.1.1), has its new tokens taken and stored all the same,
+because the other side uses them already: we call it with its new token, it calls us with ours, now and after a
+restart. Its roles, its party, stay as they were, and the new `CredentialsResult.Warning` says what was not taken; a
+client without a remote party says there that nothing was stored. `RegistrationFileTests` of each version,
+`ARenewalAnsweredWithOtherRolesKeepsItsNewTokens` / `ARenewalAnsweredAsAnotherPartyKeepsItsNewTokens`.
+
 Items marked **needs a design decision** wait on the maintainer. Severity as in POI3-ISSUES.md.
 
 
 ## Low
 
-### O5. A renewal answer with other roles switches our client to the new token but stores nothing
-`bug` · low · **open** (found 2026-10-24) · hub not exposed (it renews nothing)
-
-- **Where:** `WWCP_OCPIv2.2.1/Common/CommonHTTPClient.cs:1745` (`TokenAuth = TokenAuthFor(response.Data.Token)`) before
-  the roles check (`:1751`, `:1776`); 2.3.0 `:1738`.
-- **Problem:** where the roles differ nothing is stored, but the peer has already switched to the new tokens: our
-  file still holds its old token, so after a restart, or with a new client, we call it with a dead one.
-- **Fix:** switch `TokenAuth` only after the new token was stored, or store the peer's new token also on a roles
-  mismatch and report the mismatch.
-
 ### O6. Registering and renewing drop the settings of our local token
 `bug` · low · **open** (found 2026-10-24) · hub not exposed today (it configures no TOTP)
 
-- **Where:** `WWCP_OCPIv2.2.1/Common/CommonHTTPClient.cs:2415-2421` (`TryRegister`: `null` for
-  `LocalAccessTokenBase64Encoding`, `LocalTOTPConfig`, `LocalAccessNotBefore`/`NotAfter`), `:1795-1828`
+- **Where:** `WWCP_OCPIv2.2.1/Common/CommonHTTPClient.cs:2450-2454` (`TryRegister`: `null` for
+  `LocalAccessTokenBase64Encoding`, `LocalTOTPConfig`, `LocalAccessNotBefore`/`NotAfter`), `:1791-1830`
   (`TryPutCredentials`), `Common/CommonAPI.cs:3415` (the server side of the handshake).
 - **Problem:** a TOTP or a validity window an operator gave a peer's local token is gone with the new token.
 - **Fix:** carry the local settings over to the new token, as the remote ones are since `e637321c`.
