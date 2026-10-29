@@ -130,45 +130,17 @@ by `apiKeys add` and on the account page - and named by its hint and the beginni
 (`alices... #41WyMKor`). There is no migration, as the maintainer chose: nothing runs in production yet, and an old
 raw entry matches no key and no token.
 
+**S31 and S32 decided and fixed on 2026-10-29** (WWCP_POI `d6b0127`), as the maintainer chose: the `version` of a
+transparency software release is the one it was added with - a new version is a new release - so that a certificate
+naming a release names the version that was assessed; a change set changing it, also by removing the release and
+adding it again, is refused (`ChangedTransparencySoftwareVersion`). The `notifiedBodyNumber` and `notifiedFor` of a
+conformity assessment body are the RNO's again, also once the body has keys: a body issuing a certificate under a
+legislation the same change set adds to its `notifiedFor` signs it together with the RNO; a number names one body
+(`DuplicateNotifiedBodyNumber`, also when a version is read). SPECIFICATION.md 4.1. Left: the other properties of a
+release (`name`, `sourceCodeRepository`, `openSourceLicenses` ...) stay its manufacturer's to change.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
-
-
-## Medium
-
-### S31. A transparency software manufacturer can change a release after a conformity assessment body certified it
-`security` · medium · **open** (found 2026-10-24 at WWCP_POI `801bbce`, read from the code, no PoC)
-
-- **Where:** `WWCP_POI/WWCP_POI3/RoamingNetwork/RoamingNetwork.TransparencySoftwareChanges.cs:43-54` (`version`,
-  `name`, `sourceCodeRepository`, `openSourceLicenses` … changeable), `RoamingNetwork.Ownership.cs:1034-1072` (owned
-  by the manufacturer alone), `WWCP_POI2/RoamingNetwork/ConformityAssessmentBody/ConformityCertificate.cs:216` at
-  `5a03f14` (`VerifiedTransparencySoftwareIds`: since WWCP_POI `987fa26` a certificate is for a model and names the
-  releases among its components, still by their ids only),
-  `RoamingNetwork/RoamingNetwork.cs:2368-2404` (`UnknownTransparencyReference` checks only that the id exists).
-- **Problem:** before WWCP_POI `0c3c53c` the RNO owned both releases and certificates. Now the manufacturer alone may
-  rewrite the `version` (or anything else) of a release that another party's certificate and the CSOs' meters name.
-  A release carries no digest of the software, and a certificate pins no content of the release.
-- **Impact:** station proofs and the API show a body's certificate "verifying" release R while R now describes a
-  version the body never assessed, with no trace in the certificate.
-- **Fix:** make `version` immutable (a new version is a new release), or let a certificate pin the release's content
-  ETag or version; or refuse content changes of a release a certificate covers.
-
-### S32. A conformity assessment body declares its own notified status and notified-body number
-`design` · medium · **open; needs a design decision** (found 2026-10-24 at WWCP_POI `801bbce`, read from the code)
-
-- **Where:** `WWCP_POI/WWCP_POI3/RoamingNetwork/RoamingNetwork.RegistryChanges.cs:230-233` (`notifiedBodyNumber`,
-  `notifiedFor` changeable), `RoamingNetwork.Ownership.cs:960-978` (a party property other than its keys needs only
-  `SignerOf(party)`, the body itself), `ConformityAssessmentBody.cs:354,371` (the number's format; certificates only
-  under legislations of its own `notifiedFor`); no check that a `notifiedBodyNumber` is unique.
-- **Problem:** the RNO vets a body when it adds it. Afterwards the body alone can add "MID" or "CRA" to `notifiedFor`,
-  or take another body's number (e.g. 0102), and in the same change set issue certificates under that legislation:
-  the only check, `NotifiedFor.Contains`, is met by its own edit. Once the body has keys, the RNO cannot correct these
-  fields; it can only remove the body, in a change set every party naming its certificates signs as well
-  (SPECIFICATION.md 4.1 since WWCP_POI `52f1172`), or recover its keys.
-- **Impact:** proofs present a certificate under the MID from a body that "is notified for MID", with a forged
-  notified-body number; example A13 prints exactly these fields as what to trust.
-- **Fix:** let `notifiedBodyNumber` and `notifiedFor` be owned by the RNO (or need its co-signature); require
-  network-unique notified-body numbers.
 
 
 ## Low
