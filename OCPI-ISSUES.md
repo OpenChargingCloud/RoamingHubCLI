@@ -83,6 +83,11 @@ alone. The URLs announced carry the base API's `AdditionalURLPathPrefix`, the HU
 The tests that pinned charging profiles in the version details no longer expect them: `WWCP_OCPI_Tests`'
 `GetVersionDetails_*`, and `CPO_GetVersion_Test` / `EMSP_GetVersion_Test` of 2.2.1 and 2.3.0.
 
+**O11 fixed on 2026-10-29** (WWCP_OCPI `1aee8c1a`): `Request.LocalAccessInfo` names when the token the request came with may
+be used, not when the party's first token may (2.2.1, 2.3.0, 3.0, and 2.1.1, which the finding left out); nothing read it yet but
+its JSON. `CredentialsAccessTests` of each 2.x version and 3.0's `VersionsListTests`,
+`TheRequestNamesTheValidityOfTheTokenItCameWith`.
+
 Items marked **needs a design decision** wait on the maintainer. Severity as in POI3-ISSUES.md.
 
 
@@ -107,16 +112,6 @@ Items marked **needs a design decision** wait on the maintainer. Severity as in 
   it). 3.0 has no `CredentialsAccessTests` either (2.1.1, 2.2.1 and 2.3.0 have them).
 - **Fix:** a test per case, written as the lines are found in old files; drop `addRemoteSessionIfNotExists` if
   nothing is to write it.
-
-### O11. The request's local access names the validity window of the party's first token
-`bug` · low · **open; not verified by running** (found 2026-10-29, with O6)
-
-- **Where:** `WWCP_OCPIv2.2.1/IO/OCPIRequest.cs:574-575`, 2.3.0 `:575-576`, 3.0 `:646-647`:
-  `RemoteParty.LocalAccessInfos.FirstOrDefault()?.NotBefore` / `NotAfter`, where the token matched is
-  `localAccessInfo`.
-- **Problem:** where a party has more than one local token - one pending beside the one in effect, as every
-  registration and renewal leaves one for a while - `Request.LocalAccessInfo` names the window of another token.
-- **Fix:** `localAccessInfo.NotBefore` / `NotAfter`.
 
 ### O12. 2.1.1's routes take a token as it is, whatever is set for it
 `design` · low · **needs a design decision** (found 2026-10-29, with O6)
