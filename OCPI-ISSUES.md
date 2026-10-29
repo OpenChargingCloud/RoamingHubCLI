@@ -73,30 +73,26 @@ versions saw all of them after renewing its credentials. Whether downgrades are 
 every version (2.1.1, 2.2.1, 2.3.0, 3.0). `RegistrationFileTests` of each 2.x version,
 `TheOtherSideRenewingKeepsHowItIsReached`; 3.0's downgrades are not tested.
 
+**O7 fixed on 2026-10-29** (WWCP_OCPI `94af88ea`): the version details announce the CPO and the EMSP modules where
+a `CPO_HTTPAPI` or an `EMSP_HTTPAPI` was built on the Common API, at the path it serves them at - it says so in
+`CommonAPI.CPOModulesPath` / `EMSPModulesPath`, as the HUB_HTTPAPI does in `HUBModulesPath` - and not because the
+platform or the other side has a role (2.1.1, 2.2.1, 2.3.0, 3.0). Charging profiles are announced nowhere: no module
+API serves them yet. OCPI 3.0 has no module API for the CPO or the EMSP modules, so it announces the credentials
+alone. The URLs announced carry the base API's `AdditionalURLPathPrefix`, the HUB modules' too, which left it out.
+`ModulesAnnouncedTests` of each 2.x version; 3.0's `VersionsListTests.TheVersionDetailsAnnounceNoModuleNoModuleAPIServes`.
+The tests that pinned charging profiles in the version details no longer expect them: `WWCP_OCPI_Tests`'
+`GetVersionDetails_*`, and `CPO_GetVersion_Test` / `EMSP_GetVersion_Test` of 2.2.1 and 2.3.0.
+
 Items marked **needs a design decision** wait on the maintainer. Severity as in POI3-ISSUES.md.
 
 
 ## Low
 
-### O7. Modules are announced without routes
-`bug` · low · **open** · hub not exposed (its parties are HUB only)
-
-- **Where:** charging profiles announced in 2.2.1 `Common/CommonAPI.cs:2514-2522` (EMSP) and `:2601-2609` (CPO, when
-  `request.RemoteParty is not null`, `:2589`), 2.3.0 `:4412-4420`, `:4493-4500` (`:4481`), 3.0 `:2178-2181`, `:2283`;
-  the routes are comments only (2.2.1 `CPO/CPO_HTTPAPI.cs:3283-3309`, `EMSP/EMSP_HTTPAPI.cs:15993-16024`, 2.3.0
-  `CPO/CPO_HTTPAPI.cs:3650-3676`, `EMSP/EMSP_HTTPAPI.cs:8655-8686`). 3.0 has no CPO/EMSP routes at all (active
-  `AddOCPIMethod` calls only in `Common/CommonAPI.cs` and `SCSP/SCSPAPI.cs`), yet announces those modules for parties
-  of those roles.
-- **Problem:** what is announced follows the roles of the party, not the module APIs that were built, so a peer that
-  trusts the version details gets 404 for smart charging (and in 3.0 for every CPO/EMSP module).
-- **Fix:** announce the modules of what was built, as `HUBModulesPath` does for the HUB modules since `a2f0b038`;
-  until then leave out charging profiles.
-
 ### O8. OCPI 3.0 registers its routes as templates of the version id
 `bug` · low · **open; not verified by running** (found 2026-10-24) · hub not exposed
 
-- **Where:** `WWCP_OCPIv3.0/Common/CommonAPI.cs:2032` (`"versions/{versionId}"`), `:2439`, `:2526`, `:2574`, `:2651`
-  (`"{versionId}/credentials"`); only version details checks the id (`:2096`).
+- **Where:** `WWCP_OCPIv3.0/Common/CommonAPI.cs:2038`, `:2068` (`"versions/{versionId}"`), `:2384`, `:2458`, `:2550`,
+  `:2598`, `:2675` (`"{versionId}/credentials"`); only version details checks the id (`:2133`).
 - **Problem:** on an HTTP API shared with 2.x, `{versionId}/credentials` matches every `X/credentials`; depending on
   how Hermod orders a literal against a parameter it shadows the 2.x routes or is refused as ambiguous.
 - **Fix:** literals like 2.x: `$"versions/{Version.Id}"`, `$"{Version.Id}/credentials"`.
