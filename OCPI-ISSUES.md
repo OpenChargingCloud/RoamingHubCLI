@@ -43,25 +43,14 @@ registration the other side has answered) is not yet written down later as 2.x d
 handshake could ever go through, and it did not take the `RemoteNetworkAcl` of S19 (POI3-ISSUES.md). Both are fixed;
 `WWCP_OCPIv3.0_Tests/CommonTests/CredentialsHandshakeTests.cs`.
 
+**O3 fixed on 2026-10-29** (WWCP_OCPI `91db094a`, on O4): 3.0's `CommonAPI` constructor files `OurCredentialRoles` as
+its parties before the assets are read back, registers its version information with the base API and its remote
+parties as a provider, as 2.x do: the shared `/versions` lists 3.0 and lets its peers in with their tokens. GET
+credentials answers 3000 saying so where there is no party of its own, as POST/PUT do since O4; a 3.0 API is made
+with at least one and never loses it, so O4's test of a registration without parties is gone. The constructor's
+`LocationsAsOpenData` stays unused (the base API's switch counts); `VersionsListTests`.
+
 Items marked **needs a design decision** wait on the maintainer. Severity as in POI3-ISSUES.md.
-
-
-## Medium
-
-### O3. OCPI 3.0 has no parties of its own and is unknown to the shared versions API
-`bug` · medium · **open** · hub not exposed (no 3.0)
-
-- **Where:** `WWCP_OCPIv3.0/Common/CommonAPI.cs:1924-1927` (`OurCredentialRoles` checked, its assignment commented out),
-  `:1967-1968` (`//foreach (var partyData in OurPartyData) parties.TryAdd(...)`), `:2491-2494` (GET credentials builds
-  `Credentials` of `parties.Values`; `DataStructures/Complex/Credentials.cs:77-78` throws on no roles), `:1951` (its
-  own `AddVersionInformation`, `:7375-7390`, not `BaseAPI.AddVersionInformation` as 2.1.1 `:2199`, 2.2.1 `:2287`,
-  2.3.0 `:4212`), no `BaseAPI.AddRemotePartyProvider` (2.2.1 `:2302`), `:1876` (`LocationsAsOpenData` unused).
-- **Problem:** GET credentials answers 3000 unless parties are added by hand; the shared `/versions` lists no 3.0 and,
-  looking tokens up in `KnownRemoteParties` (`WWCP_OCPI_Common/HTTP/CommonHTTPAPI.cs:3035`), knows no 3.0 peer's
-  token.
-- **Impact:** a 3.0 platform on the shared API cannot be found or used.
-- **Fix:** store `OurCredentialRoles` as parties in the constructor as 2.x does; register the version information and
-  the remote parties with the `BaseAPI`; answer an empty set of parties with an error, not an exception.
 
 
 ## Low
