@@ -32,8 +32,7 @@ they are taken out of this list:
 | S34 RNO-stated certificates look like the body's | `65e658d` (csharp-review 15) | `"statedBy": "roamingNetworkOperator"`; the hub sets it since RoamingHub `397e478` |
 | S35 a meter's certificate is not tied to the model | `987fa26`, `7e0b0ac` (csharp-review 16, 17) | a certificate is for one model, its revisions and firmware versions, and is checked against each station and meter naming it |
 
-S5, S11 and S26 are fixed in part; what is left is said in each. The others still hold. Lines given for
-`5a03f14` were checked again; the rest are those of the commits of 2026-10-24.
+S5, S11 and S26 are fixed in part; what is left is said in each. The others still hold.
 
 **Decided and fixed on 2026-10-27** at WWCP_POI `ff2c56f` (super `ac1d46e`), as the maintainer chose:
 
@@ -139,8 +138,33 @@ legislation the same change set adds to its `notifiedFor` signs it together with
 (`DuplicateNotifiedBodyNumber`, also when a version is read). SPECIFICATION.md 4.1. Left: the other properties of a
 release (`name`, `sourceCodeRepository`, `openSourceLicenses` ...) stay its manufacturer's to change.
 
+**Checked again on 2026-10-29** at WWCP_POI `8108522` (RoamingHub `e271007`, WWCP_Node `3e2df0a`, Hermod `f3c0517c`,
+Styx `f494c8cd`, WWCP_OCPI `1aee8c1a`, super `60cbf79`): every finding below still holds, and none of those fixed
+has come back; the line numbers are those of these commits. What was left of the read-only API keys and of the masked
+OCPI tokens fixed on 2026-10-23, beyond WWCP_Node and RoamingHub, is written down again as S37 and S38. Of the
+"Left" above, S2/S9 (pushes bound by neither rule, `AuthorizeCommitPush` unset in the hub) and S13 (HSTS on the web
+interface only, `WWCPNode.cs:1221-1224`) still hold as said.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
+
+
+## Medium
+
+### S37. The HTTPExt API below `/ext` takes a read-only API key for writes
+`security` · medium · **open** (left of the read-only API keys, fixed below `/api` in WWCP_Node `7dc7c84`; found
+again 2026-10-29)
+
+- **Where:** `Hermod/Hermod/HTTP/HTTPAPI/HTTPExtAPI.cs:3951-3956`: `TryGetHTTPUser` signs the account of any valid
+  API key in, whatever its `AccessRights`, and every route of the HTTPExt API asks it, its writes as well, e.g.
+  `SET /ext/users/{UserId}` (`:6832-6850`). Nothing in Hermod reads `AccessRights` but the key itself
+  (`HTTP/HTTPAPI/Entities/APIKeys/APIKey.cs:126`).
+- **Problem:** a key is read-only unless made `ReadWrite` (`WWCP_Node/CommandLine/APIKeysCommand.cs:255-262`), and
+  `NodeHTTPAPI.TryAuthorize` refuses it for everything but reads below `/api` only
+  (`WWCP_Node/Web/NodeHTTPAPI.cs:538,573-578`); below `/ext` the same key changes what its account may change. The
+  cross-site check of S23 does not stop it, as a key is no cookie.
+- **Fix:** refuse a read-only key for every request that is no read, in `TryGetHTTPUser` or in the node's pipeline
+  below `/ext`, as `TryAuthorize` does.
 
 
 ## Low
@@ -150,7 +174,7 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 
 - **Fixed in part:** since WWCP_POI `f2ae688` a key must be valid at `createdAt` and when the server takes the change
   set, and a `createdAt` more than `MaxClockSkew` (5 minutes) after the server's time is refused
-  (`History/RoamingNetworkHistory.cs:800-808` at `5a03f14`, the same for co-signing); since `be07037` the key of a
+  (`History/RoamingNetworkHistory.cs:885-893`, the same for co-signing); since `be07037` the key of a
   price statement or an attestation must be valid at the time verified as well. An expired key no longer signs by
   a backdated timestamp, and a future one no longer pushes `lastChange` forward.
 - **Left:** `createdAt` is still not compared with the parent's `lastChange`. A party may backdate a change set to
@@ -162,14 +186,13 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 ### S11. ECDSA signatures are not required to be low-S (malleable)
 `security` · low (was high) · **open in part**
 
-- **Where:** `Styx/Styx/Illias/COSE/COSEAlgorithm.cs:1376-1422` (`VerifyECDSA` accepts both S and n−S; unchanged at
-  Styx `06b592d3`).
+- **Where:** `Styx/Styx/Illias/COSE/COSEAlgorithm.cs:1376-1421` (`VerifyECDSA` accepts both S and n−S).
 - **Fixed in part:** the price-statement case, the reason for "high", is fixed in WWCP_POI `dbf39b0`
   (csharp-review 2): the digest of a price statement leaves its signature value out, so a flipped twin is the same
   statement and no longer a split view.
 - **Left:** a third party can still flip the S of a valid ECDSA signature to a second valid one. A history keeps the
   flipped copy of a trusted attestation as another one, as it compares the signature value
-  (`WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.Attestations.cs:277` at `5a03f14`), which feeds the eviction of
+  (`WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.Attestations.cs:277`), which feeds the eviction of
   S29; anything else keyed by a signature value is open to the same.
 - **Fix:** require canonical low-S ECDSA on verification (and reject non-canonical signatures), or compare
   attestations by their signature input.
@@ -177,8 +200,8 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 ### S24. Pending change sets, commit signatures and co-signing resources are only loosely bounded
 `design` · low · **open**
 
-- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.PendingChangeSets.cs:154,320` (one global cap of 1000,
-  up to 16 MiB each, no expiry), `History/RoamingNetworkHistory.cs:1053,1134-1166` (commit signatures: role/signer
+- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.PendingChangeSets.cs:181,372` (one global cap of 1000,
+  up to 16 MiB each, no expiry), `History/RoamingNetworkHistory.cs:1201-1270,1340-1342` (commit signatures: role/signer
   self-asserted, no cap).
 - **Problem:** any party (of eight party types since WWCP_POI `801bbce`) can fill all 1000 pending slots (gigabytes,
   no expiry) and so block the RNO's own party additions; a trusted key can add unbounded commit signatures by varying
@@ -188,8 +211,8 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 ### S25. A pushed merge commit keeps arbitrary change-set signatures
 `bug` · low · **open**
 
-- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.cs:906` (merge compared with `IncludeSignatures:
-  false`), `:934` (stored as sent).
+- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.cs:1065` (merge compared with `IncludeSignatures:
+  false`), `:1103` (stored as sent).
 - **Problem:** SPECIFICATION §5.3 says a merge's change set has no signatures, but a pusher may attach up to the
   limit; they are stored, served and covered by later commit signatures.
 - **Fix:** refuse a merge whose change set carries signatures.
@@ -197,9 +220,9 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 ### S26. A withdrawn change set can be submitted again, and a withdrawal's time is the signer's
 `design` · low · **open in part** (the binding to the content fixed by WWCP_POI `bc3b1bd`)
 
-- **Where:** `WWCP_POI/WWCP_POI3/ChangeSet/RoamingNetworkChangeSetWithdrawal.cs:353-366`,
-  `RoamingNetwork/RoamingNetwork.Ownership.cs:518` at `5a03f14` (key valid at the signer's `withdrawnAt` only),
-  `History/RoamingNetworkHistory.PendingChangeSets.cs:407-` (no tombstone).
+- **Where:** `WWCP_POI/WWCP_POI3/ChangeSet/RoamingNetworkChangeSetWithdrawal.cs:391-`,
+  `RoamingNetwork/RoamingNetwork.Ownership.cs:518` (key valid at the signer's `withdrawnAt` only),
+  `History/RoamingNetworkHistory.PendingChangeSets.cs:446-483,569` (no tombstone).
 - **Fixed in part:** since WWCP_POI `bc3b1bd` the `@id` a withdrawal names is the SHA-256 of the change set's content,
   so a withdrawal is bound to the content and can no longer be replayed against another change set.
 - **Left:** after a withdrawal anyone may submit the public change set again, and a completed quorum commits it; the
@@ -210,15 +233,17 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 ### S29. Robustness and information leaks
 `bug` · low · **open**
 
-- **Where:** `WWCP_POI/WWCP_POI3/DataStructures/POIEffectiveTree.cs:365,469-476`,
-  `Proofs/RoamingNetworkProof.cs:300,393` (an `@size`/`@index` above Int64 or an object `@id` throws out of
-  `Verify`); `History/RoamingNetworkHistory.cs:781` and siblings (`:938,1079`, `.Attestations.cs:135`,
-  `.PendingChangeSets.cs:339,423,531`, `.PriceStatements.cs:626`: store exception text with file paths in 422/WS
-  errors); `WWCP_Node` signed log `Logging/SignedLog.cs:311-325` (a backward clock step across UTC midnight makes the
-  log read as tampered); `NodeHTTPAPI.Log.cs:67` and `RoamingHub` (`ToReadTheLog` null: any signed-in account reads
-  the full debug log); proof child-array completeness is not exposed (`RoamingNetworkProof.cs:563-597`), so an app may
-  be shown fewer EVSEs, miss a tariff, or miss the model, release or certificate a station or meter names; one trusted
-  attester can evict others' attestations (`History/RoamingNetworkHistory.Attestations.cs:44,254-255,417-418`).
+- **Where:** `WWCP_POI/WWCP_POI3/DataStructures/POIEffectiveTree.cs:365,468-476`,
+  `Proofs/RoamingNetworkProof.cs:354,524` (an `@size`/`@index` above Int64, which Newtonsoft reads as a `BigInteger`,
+  throws out of `Value<Decimal>()`, an object `@id` out of `Value<String>()`, both out of `Verify`);
+  `History/RoamingNetworkHistory.cs:932,1107,1258`, `.Attestations.cs:148`, `.PendingChangeSets.cs:391,476,595`,
+  `.PriceStatements.cs:694` (store exception text with file paths in 422/WS errors); `WWCP_Node` signed log
+  `Logging/SignedLog.cs:312-330` (a backward clock step across UTC midnight makes the log read as tampered);
+  `NodeHTTPAPI.Log.cs:67` and `RoamingHub` (`ToReadTheLog` null: any signed-in account reads the full debug log);
+  proof child-array completeness is not exposed (`RoamingNetworkProof.cs:772-818,1108-1119`: `Given` returns the
+  entities of complete and partial arrays alike), so an app may be shown fewer EVSEs, miss a tariff, or miss the model,
+  release or certificate a station or meter names; one trusted attester can evict others' attestations
+  (`History/RoamingNetworkHistory.Attestations.cs:44,276-277,521-525`).
 - **Fix:** range/type-check before `Value<…>()` and return false; return generic error text and log details; order the
   signed log by id, not file name; add a `log:read` permission; expose per-array completeness in proofs; cap
   attestations per holder.
@@ -227,12 +252,26 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 `design` · low · **open** (found 2026-10-24 at WWCP_POI `801bbce`, read from the code)
 
 - **Where:** `TransparencySoftware_Id` and `TransparencySoftwareCertificate_Id` are free text; unique in the network
-  (`WWCP_POI/WWCP_POI3/RoamingNetwork/RoamingNetwork.cs:2252,2321`); the owner of an Add is whichever parent it names
-  (`RoamingNetwork.Ownership.cs:1052-1061`).
+  (`WWCP_POI/WWCP_POI3/RoamingNetwork/RoamingNetwork.cs:2345,2431`); the owner of an Add is whichever parent it names
+  (`RoamingNetwork.Ownership.cs:270-273`).
 - **Problem:** any transparency software manufacturer can take another's natural release ids (e.g. "chargy-1.4.2"),
   any body another's certificate number. The rightful owner can then not add them under that id, and meters and
   certificates, which reference by id alone, may be pointed at the squatter's entry.
 - **Fix:** make the ids unique within their parent, as model ids are, or let references name the owner.
+
+### S38. WWCP_OCPI writes the token of a peer into its status messages
+`security` · low · **open** (left of the masked OCPI tokens, masked in the hub's own log and traffic by RoamingHub
+`07aa584`; found again 2026-10-29)
+
+- **Where:** the credentials routes of every version, with `LocalAccessInfo.AccessToken` in the text ("The given
+  access token '…' is already registered!", "… is not fully registered!", "… could not be deleted here …", "… was
+  deleted!"): `WWCP_OCPI/WWCP_OCPIv2.1.1/Common/CommonAPI.cs:2730,2872,2892,2902`,
+  `WWCP_OCPIv2.2.1/Common/CommonAPI.cs:2920,3045,3065,3075`, `WWCP_OCPIv2.3.0/Common/CommonAPI.cs:4812,4937,4957,4967`,
+  `WWCP_OCPIv3.0/Common/CommonAPI.cs:2562,2689,2703`.
+- **Problem:** the token a peer authenticates with goes back in `status_message`, and so into every log of the answer
+  on its way: the peer's, a proxy's, a support ticket's. The hub masks it in its own log and traffic only
+  (`RoamingHub/OCPI/OCPIVersion.cs:529`, `MaskTokens`).
+- **Fix:** name the token by its last four characters, as `MaskTokens` does, or not at all.
 
 
 ### S30. Informative (no change needed, or defence in depth)
@@ -240,7 +279,7 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 
 - Production builds publish source maps (`RoamingHub/.../Frontend/webpack.config.js:41`); the inherited
   `~/poi/serviceCheck` returns the machine name (`Hermod/Hermod/HTTP/HTTPAPI/HTTPAPI.cs:1222`); the OCPI/Configuration
-  pages show server file paths, machine and OS (`RoamingHub/RoamingHub/RoamingHub.cs:563-565`) to any signed-in
+  pages show server file paths, machine and OS (`RoamingHub/RoamingHub/RoamingHub.cs:579-584`) to any signed-in
   account; outbound OCPI/Mobilithek TLS does no revocation check; the Mobilithek `url` accepts `http`
   though its error text says https. The frontend was clean of XSS (lit-html escapes; the one `unsafeHTML` renders a
   regex-validated QR SVG), paths are pattern-checked, and the CLI reaches no shell.
