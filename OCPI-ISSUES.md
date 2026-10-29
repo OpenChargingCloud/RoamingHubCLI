@@ -57,19 +57,19 @@ restart. Its roles, its party, stay as they were, and the new `CredentialsResult
 client without a remote party says there that nothing was stored. `RegistrationFileTests` of each version,
 `ARenewalAnsweredWithOtherRolesKeepsItsNewTokens` / `ARenewalAnsweredAsAnotherPartyKeepsItsNewTokens`.
 
+**O6 fixed on 2026-10-29** (WWCP_OCPI `7d901fc9`): a new token of ours keeps the settings of the one
+it takes the place of - its TOTP, its validity window, how it is encoded, whether it allows downgrades, its HTTP
+modifiers - in `TryRegister`, `TryPutCredentials` and the token they store before sending (2.1.1, 2.2.1, 2.3.0), and
+token C keeps those of token A on the server side of the handshake (2.1.1, 2.2.1, 2.3.0, 3.0):
+`LocalAccessInfos.ReplacedBy(NewToken, Current)` in `WWCP_OCPI_Common`. A peer set to send its token as it is is no
+longer shut out by its new token. `RegistrationFileTests` of each 2.x version, `ARenewalKeepsTheSettingsOfOurToken`,
+`ARegistrationKeepsTheSettingsOfOurToken`, `TheOtherSideRegisteringKeepsTheSettingsOfItsToken`; 3.0's
+`ARegistrationPutsTokenCInPlaceOfTokenA` sends token C as token A was set to be sent.
+
 Items marked **needs a design decision** wait on the maintainer. Severity as in POI3-ISSUES.md.
 
 
 ## Low
-
-### O6. Registering and renewing drop the settings of our local token
-`bug` · low · **open** (found 2026-10-24) · hub not exposed today (it configures no TOTP)
-
-- **Where:** `WWCP_OCPIv2.2.1/Common/CommonHTTPClient.cs:2450-2454` (`TryRegister`: `null` for
-  `LocalAccessTokenBase64Encoding`, `LocalTOTPConfig`, `LocalAccessNotBefore`/`NotAfter`), `:1791-1830`
-  (`TryPutCredentials`), `Common/CommonAPI.cs:3415` (the server side of the handshake).
-- **Problem:** a TOTP or a validity window an operator gave a peer's local token is gone with the new token.
-- **Fix:** carry the local settings over to the new token, as the remote ones are since `e637321c`.
 
 ### O7. Modules are announced without routes
 `bug` · low · **open** · hub not exposed (its parties are HUB only)
@@ -104,6 +104,36 @@ Items marked **needs a design decision** wait on the maintainer. Severity as in 
   it). 3.0 has no `CredentialsAccessTests` either (2.1.1, 2.2.1 and 2.3.0 have them).
 - **Fix:** a test per case, written as the lines are found in old files; drop `addRemoteSessionIfNotExists` if
   nothing is to write it.
+
+### O10. 2.3.0's receiver of a registration drops how the other side is reached
+`bug` · low · **open** (found 2026-10-29, with O6) · hub exposed (peers register with it over 2.3.0)
+
+- **Where:** `WWCP_OCPIv2.3.0/Common/CommonAPI.cs:5268-5292` (`POSTOrPUTCredentials`: `null` for every remote setting,
+  from `RemoteAccessTokenBase64Encoding` to `RemoteAccessNotAfter`). 2.2.1 and 3.0 take them from the
+  remote access the party had.
+- **Problem:** a peer registering or renewing here over 2.3.0 loses its client certificates, TLS versions, timeouts,
+  user agent and the encoding and TOTP of its token, as 2.2.1 did before `e637321c`.
+- **Fix:** as 2.2.1: `oldRemoteParty.RemoteAccessInfos.FirstOrDefault()?.…`.
+
+### O11. The request's local access names the validity window of the party's first token
+`bug` · low · **open; not verified by running** (found 2026-10-29, with O6)
+
+- **Where:** `WWCP_OCPIv2.2.1/IO/OCPIRequest.cs:574-575`, 2.3.0 `:575-576`, 3.0 `:646-647`:
+  `RemoteParty.LocalAccessInfos.FirstOrDefault()?.NotBefore` / `NotAfter`, where the token matched is
+  `localAccessInfo`.
+- **Problem:** where a party has more than one local token - one pending beside the one in effect, as every
+  registration and renewal leaves one for a while - `Request.LocalAccessInfo` names the window of another token.
+- **Fix:** `localAccessInfo.NotBefore` / `NotAfter`.
+
+### O12. 2.1.1's routes take a token as it is, whatever is set for it
+`design` · low · **needs a design decision** (found 2026-10-29, with O6)
+
+- **Where:** `WWCP_OCPIv2.1.1/IO/OCPIRequest.cs` reads no Base64; the shared `/versions` of the base API honours
+  `AccessTokenIsBase64Encoded`.
+- **Problem:** a 2.1.1 local token set to be sent Base64 is let in at `/versions` and refused at `versions/2.1.1` and
+  every other 2.1.1 route ("Unknown access token!").
+- **Fix:** either 2.1.1 reads tokens as their setting says, as 2.2.1 does, or the setting is ignored for 2.1.1 in
+  the base API too (2.1.1 tokens are raw by the standard).
 
 
 ## Checked, fixed
