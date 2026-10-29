@@ -31,6 +31,18 @@ and takes an unknown token as no token, never a wrong TOTP. The shared `/version
 whatever the open data, and a token its table blocks with 401 and "Invalid or blocked access token!" (was 200). The
 hub's `versions/2.2.1` answers a stale token 401.
 
+**O4 fixed on 2026-10-29** (WWCP_OCPI `72507f7f`): 3.0's POST/PUT credentials takes over 2.2.1's order. It makes its
+answer first and refuses, OCPI 3000 with HTTP 500, where this platform has no parties to name (O3) before anything is
+changed; it then stores token C in place of token A in one line and takes token A from any other party only once
+that line is in its file. Where the file refuses it, the change is taken back and the peer is answered 3000 with 500,
+its token A still valid. How the peer is reached - TLS, timeouts, retries, user agent, the validity of its token - and
+the versions it sees are kept. Every line of 3.0's file of the remote parties is now written first-hand, not through
+the queue of the assets, with `OnRemotePartyNotSaved` as in 2.x; a change 3.0 keeps where its file refused it (a
+registration the other side has answered) is not yet written down later as 2.x does. Two things in 3.0's
+`CommonClient` came up with it: it never set its `RemoteVersionsURL`, so no 3.0 client could fetch versions and no
+handshake could ever go through, and it did not take the `RemoteNetworkAcl` of S19 (POI3-ISSUES.md). Both are fixed;
+`WWCP_OCPIv3.0_Tests/CommonTests/CredentialsHandshakeTests.cs`.
+
 Items marked **needs a design decision** wait on the maintainer. Severity as in POI3-ISSUES.md.
 
 
@@ -39,28 +51,17 @@ Items marked **needs a design decision** wait on the maintainer. Severity as in 
 ### O3. OCPI 3.0 has no parties of its own and is unknown to the shared versions API
 `bug` · medium · **open** · hub not exposed (no 3.0)
 
-- **Where:** `WWCP_OCPIv3.0/Common/CommonAPI.cs:1938` (`OurCredentialRoles` checked, its assignment commented out),
-  `:1966-1967` (`//foreach (var partyData in OurPartyData) parties.TryAdd(...)`), `:2490-2494` (GET credentials builds
-  `Credentials` of `parties.Values`; `DataStructures/Complex/Credentials.cs:77-78` throws on no roles), `:1950` (its
-  own `AddVersionInformation`, `:7046-7061`, not `BaseAPI.AddVersionInformation` as 2.1.1 `:2199`, 2.2.1 `:2287`,
-  2.3.0 `:4212`), no `BaseAPI.AddRemotePartyProvider` (2.2.1 `:2302`), `:1875` (`LocationsAsOpenData` unused).
+- **Where:** `WWCP_OCPIv3.0/Common/CommonAPI.cs:1924-1927` (`OurCredentialRoles` checked, its assignment commented out),
+  `:1967-1968` (`//foreach (var partyData in OurPartyData) parties.TryAdd(...)`), `:2491-2494` (GET credentials builds
+  `Credentials` of `parties.Values`; `DataStructures/Complex/Credentials.cs:77-78` throws on no roles), `:1951` (its
+  own `AddVersionInformation`, `:7375-7390`, not `BaseAPI.AddVersionInformation` as 2.1.1 `:2199`, 2.2.1 `:2287`,
+  2.3.0 `:4212`), no `BaseAPI.AddRemotePartyProvider` (2.2.1 `:2302`), `:1876` (`LocationsAsOpenData` unused).
 - **Problem:** GET credentials answers 3000 unless parties are added by hand; the shared `/versions` lists no 3.0 and,
   looking tokens up in `KnownRemoteParties` (`WWCP_OCPI_Common/HTTP/CommonHTTPAPI.cs:3035`), knows no 3.0 peer's
   token.
 - **Impact:** a 3.0 platform on the shared API cannot be found or used.
 - **Fix:** store `OurCredentialRoles` as parties in the constructor as 2.x does; register the version information and
   the remote parties with the `BaseAPI`; answer an empty set of parties with an error, not an exception.
-
-### O4. OCPI 3.0 POST/PUT credentials removes the peer's token before its reply can fail
-`bug` · medium · **open** (found 2026-10-24) · hub not exposed
-
-- **Where:** `WWCP_OCPIv3.0/Common/CommonAPI.cs:2959-3028`: token A removed first (`:2962`), token C stored (`:2967`)
-  without looking at `NotSaved`, the reply built of `parties.Values` (`:3024-3027`), which throws with no parties (O3).
-- **Problem:** the peer gets 3000 after its token A is gone and never learns token C: it is locked out. 2.2.1 does it
-  in the safe order: it stores C (`WWCP_OCPIv2.2.1/Common/CommonAPI.cs:3379`), checks `NotSaved`, then removes A
-  (`:3444`), and keeps how the peer is reached; 3.0 passes `null` for all of that.
-- **Fix:** take over 2.2.1's order, its `NotSaved` handling and the fields of how the peer is reached; build the reply
-  before changing anything.
 
 
 ## Low
