@@ -66,6 +66,13 @@ longer shut out by its new token. `RegistrationFileTests` of each 2.x version, `
 `ARegistrationKeepsTheSettingsOfOurToken`, `TheOtherSideRegisteringKeepsTheSettingsOfItsToken`; 3.0's
 `ARegistrationPutsTokenCInPlaceOfTokenA` sends token C as token A was set to be sent.
 
+**O10 fixed on 2026-10-29** (WWCP_OCPI `0dc3a790`): 2.3.0's receiver of a registration or renewal keeps how the other
+side is reached - client certificates, TLS versions, IPv4 first, timeouts, retries, content types, user agent, the
+encoding, TOTP and validity window of its token - and the versions it sees, as 2.2.1 and 3.0 do; a peer kept to some
+versions saw all of them after renewing its credentials. Whether downgrades are allowed for its token is now kept in
+every version (2.1.1, 2.2.1, 2.3.0, 3.0). `RegistrationFileTests` of each 2.x version,
+`TheOtherSideRenewingKeepsHowItIsReached`; 3.0's downgrades are not tested.
+
 Items marked **needs a design decision** wait on the maintainer. Severity as in POI3-ISSUES.md.
 
 
@@ -104,16 +111,6 @@ Items marked **needs a design decision** wait on the maintainer. Severity as in 
   it). 3.0 has no `CredentialsAccessTests` either (2.1.1, 2.2.1 and 2.3.0 have them).
 - **Fix:** a test per case, written as the lines are found in old files; drop `addRemoteSessionIfNotExists` if
   nothing is to write it.
-
-### O10. 2.3.0's receiver of a registration drops how the other side is reached
-`bug` · low · **open** (found 2026-10-29, with O6) · hub exposed (peers register with it over 2.3.0)
-
-- **Where:** `WWCP_OCPIv2.3.0/Common/CommonAPI.cs:5268-5292` (`POSTOrPUTCredentials`: `null` for every remote setting,
-  from `RemoteAccessTokenBase64Encoding` to `RemoteAccessNotAfter`). 2.2.1 and 3.0 take them from the
-  remote access the party had.
-- **Problem:** a peer registering or renewing here over 2.3.0 loses its client certificates, TLS versions, timeouts,
-  user agent and the encoding and TOTP of its token, as 2.2.1 did before `e637321c`.
-- **Fix:** as 2.2.1: `oldRemoteParty.RemoteAccessInfos.FirstOrDefault()?.…`.
 
 ### O11. The request's local access names the validity window of the party's first token
 `bug` · low · **open; not verified by running** (found 2026-10-29, with O6)
