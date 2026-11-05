@@ -145,26 +145,18 @@ OCPI tokens fixed on 2026-10-23, beyond WWCP_Node and RoamingHub, is written dow
 "Left" above, S2/S9 (pushes bound by neither rule, `AuthorizeCommitPush` unset in the hub) and S13 (HSTS on the web
 interface only, `WWCPNode.cs:1221-1224`) still hold as said.
 
+**S25, S37 and S38 fixed on 2026-11-05** (WWCP_POI `7e2c198`, WWCP_Node `42ee899`, WWCP_OCPI `05534974`): a merge commit
+whose change set is signed is refused where it is appended (`RoamingNetworkHistory.TryAppend`; its identification
+leaves those signatures out, so a server holding the merge takes such a copy as known, and one taking it with its
+parents refuses it). Below `/ext` a node refuses with 403 every request that is no read (GET, HEAD, OPTIONS) and
+brings a read-only API key (`ReadOnlyAPIKeyPipeline`, next to `CrossSitePipeline`), as `NodeHTTPAPI.TryAuthorize`
+does below `/api`; before, such a key added itself a key that may write (`ExtReadOnlyAPIKeyTests`). Hermod is left
+as it is: a key made there is read-only unless said otherwise, and other programs write with such keys. The
+credentials routes of WWCP_OCPI no longer name the token in their status messages, 27 of them in 2.1.1, 2.2.1, 2.3.0
+and 3.0: already, not yet, not fully registered, blocked, not deleted, deleted, and no party having token A.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
-
-
-## Medium
-
-### S37. The HTTPExt API below `/ext` takes a read-only API key for writes
-`security` · medium · **open** (left of the read-only API keys, fixed below `/api` in WWCP_Node `7dc7c84`; found
-again 2026-10-29)
-
-- **Where:** `Hermod/Hermod/HTTP/HTTPAPI/HTTPExtAPI.cs:3951-3956`: `TryGetHTTPUser` signs the account of any valid
-  API key in, whatever its `AccessRights`, and every route of the HTTPExt API asks it, its writes as well, e.g.
-  `SET /ext/users/{UserId}` (`:6832-6850`). Nothing in Hermod reads `AccessRights` but the key itself
-  (`HTTP/HTTPAPI/Entities/APIKeys/APIKey.cs:126`).
-- **Problem:** a key is read-only unless made `ReadWrite` (`WWCP_Node/CommandLine/APIKeysCommand.cs:255-262`), and
-  `NodeHTTPAPI.TryAuthorize` refuses it for everything but reads below `/api` only
-  (`WWCP_Node/Web/NodeHTTPAPI.cs:538,573-578`); below `/ext` the same key changes what its account may change. The
-  cross-site check of S23 does not stop it, as a key is no cookie.
-- **Fix:** refuse a read-only key for every request that is no read, in `TryGetHTTPUser` or in the node's pipeline
-  below `/ext`, as `TryAuthorize` does.
 
 
 ## Low
@@ -186,7 +178,8 @@ again 2026-10-29)
 ### S11. ECDSA signatures are not required to be low-S (malleable)
 `security` · low (was high) · **open in part**
 
-- **Where:** `Styx/Styx/Illias/COSE/COSEAlgorithm.cs:1376-1421` (`VerifyECDSA` accepts both S and n−S).
+- **Where:** `Styx/Styx/Illias/COSE/COSEAlgorithm.cs:1476-1523` (`VerifyECDSA` accepts both S and n−S, also by the
+  platform's `VerifyHash` on the NIST curves since Styx `42e2c239`).
 - **Fixed in part:** the price-statement case, the reason for "high", is fixed in WWCP_POI `dbf39b0`
   (csharp-review 2): the digest of a price statement leaves its signature value out, so a flipped twin is the same
   statement and no longer a split view.
@@ -207,15 +200,6 @@ again 2026-10-29)
   no expiry) and so block the RNO's own party additions; a trusted key can add unbounded commit signatures by varying
   `signedAt`; `RequiredSignatureRoles` compares only the claimed role text.
 - **Fix:** a quota and expiry per party for pending change sets; tie commit-signature roles to keys and cap them.
-
-### S25. A pushed merge commit keeps arbitrary change-set signatures
-`bug` · low · **open**
-
-- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.cs:1065` (merge compared with `IncludeSignatures:
-  false`), `:1103` (stored as sent).
-- **Problem:** SPECIFICATION §5.3 says a merge's change set has no signatures, but a pusher may attach up to the
-  limit; they are stored, served and covered by later commit signatures.
-- **Fix:** refuse a merge whose change set carries signatures.
 
 ### S26. A withdrawn change set can be submitted again, and a withdrawal's time is the signer's
 `design` · low · **open in part** (the binding to the content fixed by WWCP_POI `bc3b1bd`)
@@ -258,21 +242,6 @@ again 2026-10-29)
   any body another's certificate number. The rightful owner can then not add them under that id, and meters and
   certificates, which reference by id alone, may be pointed at the squatter's entry.
 - **Fix:** make the ids unique within their parent, as model ids are, or let references name the owner.
-
-### S38. WWCP_OCPI writes the token of a peer into its status messages
-`security` · low · **open** (left of the masked OCPI tokens, masked in the hub's own log and traffic by RoamingHub
-`07aa584`; found again 2026-10-29)
-
-- **Where:** the credentials routes of every version, with `LocalAccessInfo.AccessToken` in the text ("The given
-  access token '…' is already registered!", "… is not fully registered!", "… could not be deleted here …", "… was
-  deleted!"): `WWCP_OCPI/WWCP_OCPIv2.1.1/Common/CommonAPI.cs:2730,2872,2892,2902`,
-  `WWCP_OCPIv2.2.1/Common/CommonAPI.cs:2920,3045,3065,3075`, `WWCP_OCPIv2.3.0/Common/CommonAPI.cs:4812,4937,4957,4967`,
-  `WWCP_OCPIv3.0/Common/CommonAPI.cs:2562,2689,2703`.
-- **Problem:** the token a peer authenticates with goes back in `status_message`, and so into every log of the answer
-  on its way: the peer's, a proxy's, a support ticket's. The hub masks it in its own log and traffic only
-  (`RoamingHub/OCPI/OCPIVersion.cs:529`, `MaskTokens`).
-- **Fix:** name the token by its last four characters, as `MaskTokens` does, or not at all.
-
 
 ### S30. Informative (no change needed, or defence in depth)
 `docs` · info
