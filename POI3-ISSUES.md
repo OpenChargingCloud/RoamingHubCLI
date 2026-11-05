@@ -181,49 +181,32 @@ the documentation name their ids so; WWCP_POI.TS and the vectors of WWCPPOIConfo
   midnight, also over a restart (WWCP_Node); the log and its stream are `log:read` on a hub (`NodeResources.Log`),
   which `viewer`, `hub` and the administrators carry and an account without a role does not.
 
+**S5, S24 and S26 decided and fixed on 2026-11-05** (WWCP_POI `12e993a`), as the maintainer chose:
+- S5: no `lastChange` goes back. A change set is stamped with its `createdAt`, or with the `lastChange` of the roaming
+  network of the version it is applied to, where that is later: as the `lastChange` of the network, of what it changes,
+  adds and embeds, and as the `created` of what it adds without one (`RoamingNetwork.TryApplyChanges`; SPECIFICATION.md
+  4, the docs of the entities). Nobody is refused for it, and its keys are checked at its `createdAt` still. It changes
+  what a version holds, so WWCP_POI.TS and the vectors of WWCPPOIConformanceTests follow (three rebased change sets of
+  `poi-histories.json`). Not solved by it: a change committed long after its `createdAt` shows a `lastChange` before a
+  consumer's last pull, e.g. OCPI `date_from`; the OCPI export should take the time the hub saw a change.
+- S24: a party has at most `MaxPendingChangeSetsPerParty` (50) change sets waiting, counted for the party of the first
+  signature of each one, and a change set waits `PendingChangeSetExpiry` (30 days) at most, from when it came, kept in
+  the store as `since` (this replaces the "no expiry" of 2026-10-22); the bound of 1000 stays. A commit or checkpoint
+  keeps one signature of each key in each role, the first (`IsOfTheSameKeyAndRoleAs`), and a signature counts for a
+  required role only by a key the version lets sign in it: a signing key certified for the RNO, or one of the
+  charging station operator its `signer` names (`RoamingNetworkCommitSignatureRoles.KeyMaySignIn`); leaders and
+  witnesses stay the verifier's to judge. SPECIFICATION.md 4.2 and 5.4.
+- S26: a withdrawn change set, or one rebased from it, is refused again, waiting or committed at once, until the
+  version it was made for is too old for a change set anyway, so the withdrawals kept bound themselves; they are kept
+  in the store (`pendingChangeSetWithdrawn`) and survive a restart. Submitted again, a change set needs new
+  signatures. The key of a withdrawal is checked when the server takes it as well. SPECIFICATION.md 4.2.
+Tests: `PendingChangeSetBoundsTests`, `LastChangeTests`, `SignatureTwinTests.A_commit_keeps_one_signature_per_key_and_role`.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
 
 ## Low
-
-### S5. `createdAt` is chosen by the signer and may lie before the version it changes
-`design` · low (was high) · **open in part; needs a design decision**
-
-- **Fixed in part:** since WWCP_POI `f2ae688` a key must be valid at `createdAt` and when the server takes the change
-  set, and a `createdAt` more than `MaxClockSkew` (5 minutes) after the server's time is refused
-  (`History/RoamingNetworkHistory.cs:885-893`, the same for co-signing); since `be07037` the key of a
-  price statement or an attestation must be valid at the time verified as well. An expired key no longer signs by
-  a backdated timestamp, and a future one no longer pushes `lastChange` forward.
-- **Left:** `createdAt` is still not compared with the parent's `lastChange`. A party may backdate a change set to
-  any time its key was valid; that time becomes the `lastChange` of what it changes, earlier than the version
-  before, and of manufacturers, transparency software manufacturers and conformity assessment bodies alike.
-- **Fix:** require parent `lastChange` ≤ `createdAt`, or say in the specification that `lastChange` is the signer's
-  claim only.
-
-### S24. Pending change sets, commit signatures and co-signing resources are only loosely bounded
-`design` · low · **open**
-
-- **Where:** `WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.PendingChangeSets.cs:181,372` (one global cap of 1000,
-  up to 16 MiB each, no expiry), `History/RoamingNetworkHistory.cs:1201-1270,1340-1342` (commit signatures: role/signer
-  self-asserted, no cap).
-- **Problem:** any party (of eight party types since WWCP_POI `801bbce`) can fill all 1000 pending slots (gigabytes,
-  no expiry) and so block the RNO's own party additions; a trusted key can add unbounded commit signatures by varying
-  `signedAt`; `RequiredSignatureRoles` compares only the claimed role text.
-- **Fix:** a quota and expiry per party for pending change sets; tie commit-signature roles to keys and cap them.
-
-### S26. A withdrawn change set can be submitted again, and a withdrawal's time is the signer's
-`design` · low · **open in part** (the binding to the content fixed by WWCP_POI `bc3b1bd`)
-
-- **Where:** `WWCP_POI/WWCP_POI3/ChangeSet/RoamingNetworkChangeSetWithdrawal.cs:391-`,
-  `RoamingNetwork/RoamingNetwork.Ownership.cs:518` (key valid at the signer's `withdrawnAt` only),
-  `History/RoamingNetworkHistory.PendingChangeSets.cs:446-483,569` (no tombstone).
-- **Fixed in part:** since WWCP_POI `bc3b1bd` the `@id` a withdrawal names is the SHA-256 of the change set's content,
-  so a withdrawal is bound to the content and can no longer be replayed against another change set.
-- **Left:** after a withdrawal anyone may submit the public change set again, and a completed quorum commits it; the
-  key of a withdrawal is checked at its signer-chosen `withdrawnAt` only, not also when the server takes it, as
-  change sets are since `f2ae688`.
-- **Fix:** keep tombstones, require fresh signatures after a withdrawal, check the key when the withdrawal is taken.
 
 ### S30. Informative (no change needed, or defence in depth)
 `docs` · info
