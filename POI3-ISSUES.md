@@ -155,6 +155,16 @@ as it is: a key made there is read-only unless said otherwise, and other program
 credentials routes of WWCP_OCPI no longer name the token in their status messages, 27 of them in 2.1.1, 2.2.1, 2.3.0
 and 3.0: already, not yet, not fully registered, blocked, not deleted, deleted, and no party having token A.
 
+**S36 fixed on 2026-11-05** (WWCP_POI `045e180`, RoamingHub `68a94a5`), as the maintainer chose: the `@id` of a
+transparency software release is the `@id` of its manufacturer, a colon and a name of its own without one
+(`GraphDefined:chargy-1.5.0`), of a certificate the `@id` of the body issuing it alike (`PTB:2026-0042`, its number as a
+document being its `documentNumber`), compared without case; a version or change set holding one identified otherwise
+is refused, also when a version is read (`RoamingNetwork.ForeignTransparencySoftware`, `ForeignConformityCertificate`;
+SPECIFICATION.md 4.1). So no manufacturer takes another one's release ids, no body another one's certificate numbers,
+and two bodies numbering theirs alike both have them; references still name the id alone. A colon, not a slash: the
+ids stand in URL paths (`.../TSMs/{TSM_Id}/TSs/{TS_Id}`), where Hermod routes `%2F` nowhere. The examples (A13) and
+the documentation name their ids so; WWCP_POI.TS and the vectors of WWCPPOIConformanceTests follow.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
@@ -232,23 +242,15 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
   signed log by id, not file name; add a `log:read` permission; expose per-array completeness in proofs; cap
   attestations per holder.
 
-### S36. Release and certificate ids are unique in the network, not within their owner
-`design` · low · **open** (found 2026-10-24 at WWCP_POI `801bbce`, read from the code)
-
-- **Where:** `TransparencySoftware_Id` and `TransparencySoftwareCertificate_Id` are free text; unique in the network
-  (`WWCP_POI/WWCP_POI3/RoamingNetwork/RoamingNetwork.cs:2345,2431`); the owner of an Add is whichever parent it names
-  (`RoamingNetwork.Ownership.cs:270-273`).
-- **Problem:** any transparency software manufacturer can take another's natural release ids (e.g. "chargy-1.4.2"),
-  any body another's certificate number. The rightful owner can then not add them under that id, and meters and
-  certificates, which reference by id alone, may be pointed at the squatter's entry.
-- **Fix:** make the ids unique within their parent, as model ids are, or let references name the owner.
-
 ### S30. Informative (no change needed, or defence in depth)
 `docs` · info
 
-- Production builds publish source maps (`RoamingHub/.../Frontend/webpack.config.js:41`); the inherited
-  `~/poi/serviceCheck` returns the machine name (`Hermod/Hermod/HTTP/HTTPAPI/HTTPAPI.cs:1222`); the OCPI/Configuration
-  pages show server file paths, machine and OS (`RoamingHub/RoamingHub/RoamingHub.cs:579-584`) to any signed-in
-  account; outbound OCPI/Mobilithek TLS does no revocation check; the Mobilithek `url` accepts `http`
-  though its error text says https. The frontend was clean of XSS (lit-html escapes; the one `unsafeHTML` renders a
-  regex-validated QR SVG), paths are pattern-checked, and the CLI reaches no shell.
+- Production builds publish source maps (`RoamingHub/.../Frontend/webpack.config.js:41`), of code that is AGPL and
+  public anyway; the inherited `~/poi/serviceCheck` returns the machine name (`Hermod/Hermod/HTTP/HTTPAPI/HTTPAPI.cs:1222`),
+  left as it is, as Hermod's other programs serve it too; the Configuration page shows server file paths, machine and
+  OS (`RoamingHub/RoamingHub/RoamingHub.cs:579-584`), since `configuration:read` (`NodeHTTPAPI.cs:383`) to the roles
+  `viewer` and `hub` and administrators only, no longer to any signed-in account; outbound OCPI/Mobilithek TLS does no
+  revocation check (`CertificateRevocationCheckMode` of Hermod's `ATLSClient` is set nowhere): a check that is strict
+  would end the connections whenever an OCSP or CRL server is out of reach, so it waits for a switch per peer. The
+  Mobilithek `url` takes `https` alone since RoamingHub `68a94a5`. The frontend was clean of XSS (lit-html escapes; the
+  one `unsafeHTML` renders a regex-validated QR SVG), paths are pattern-checked, and the CLI reaches no shell.
