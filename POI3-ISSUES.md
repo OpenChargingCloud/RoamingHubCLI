@@ -165,6 +165,22 @@ and two bodies numbering theirs alike both have them; references still name the 
 ids stand in URL paths (`.../TSMs/{TSM_Id}/TSs/{TS_Id}`), where Hermod routes `%2F` nowhere. The examples (A13) and
 the documentation name their ids so; WWCP_POI.TS and the vectors of WWCPPOIConformanceTests follow.
 
+**S11 and S29 fixed on 2026-11-05** (WWCP_POI `d35c780`, WWCP_Node `8cc1d2f`, RoamingHub `a918615`):
+- S11: two signatures that sign the same by the same key are one, whatever their value: an attestation by its
+  signature input (`RoamingNetworkAttestation.AttestsTheSameAs`), a commit or checkpoint signature by its role, signer,
+  time, algorithm and key (`RoamingNetworkCommitSignature.SignsTheSameAs`, `NotYetIn`), where a history takes them, a
+  commit or checkpoint adds them and where either is read. So the twin (r, n − s) of an ECDSA signature anybody can make
+  is no further attestation and no further signature (`SignatureTwinTests`). Styx still verifies both forms, as neither
+  BouncyCastle nor .NET signs low-S, and a co-signed change set naming one key twice is refused as before.
+- S29: a size or index beyond 64 bits (a `BigInteger` to Newtonsoft) and an object as the identification of the roaming
+  network make no proof and `Verify` says so instead of throwing (`POIEffectiveTree.IntegerOf`, `GivenRoamingNetworkId`);
+  `RoamingNetworkProof.GivesCompletely` and `SizeOf` tell what a proof gives of a child array partially or not at all
+  (`ProofRobustnessTests`); a client is told only that the store refused, its reason with its paths goes to
+  `OnStoreError`; beyond `MaxAttestations` the oldest attestation of the key holding the most goes, so one attester
+  evicts only its own; the signed log writes on into the file of the later day when the clock steps back across
+  midnight, also over a restart (WWCP_Node); the log and its stream are `log:read` on a hub (`NodeResources.Log`),
+  which `viewer`, `hub` and the administrators carry and an account without a role does not.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
@@ -184,21 +200,6 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
   before, and of manufacturers, transparency software manufacturers and conformity assessment bodies alike.
 - **Fix:** require parent `lastChange` ≤ `createdAt`, or say in the specification that `lastChange` is the signer's
   claim only.
-
-### S11. ECDSA signatures are not required to be low-S (malleable)
-`security` · low (was high) · **open in part**
-
-- **Where:** `Styx/Styx/Illias/COSE/COSEAlgorithm.cs:1476-1523` (`VerifyECDSA` accepts both S and n−S, also by the
-  platform's `VerifyHash` on the NIST curves since Styx `42e2c239`).
-- **Fixed in part:** the price-statement case, the reason for "high", is fixed in WWCP_POI `dbf39b0`
-  (csharp-review 2): the digest of a price statement leaves its signature value out, so a flipped twin is the same
-  statement and no longer a split view.
-- **Left:** a third party can still flip the S of a valid ECDSA signature to a second valid one. A history keeps the
-  flipped copy of a trusted attestation as another one, as it compares the signature value
-  (`WWCP_POI/WWCP_POI3/History/RoamingNetworkHistory.Attestations.cs:277`), which feeds the eviction of
-  S29; anything else keyed by a signature value is open to the same.
-- **Fix:** require canonical low-S ECDSA on verification (and reject non-canonical signatures), or compare
-  attestations by their signature input.
 
 ### S24. Pending change sets, commit signatures and co-signing resources are only loosely bounded
 `design` · low · **open**
@@ -223,24 +224,6 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
   key of a withdrawal is checked at its signer-chosen `withdrawnAt` only, not also when the server takes it, as
   change sets are since `f2ae688`.
 - **Fix:** keep tombstones, require fresh signatures after a withdrawal, check the key when the withdrawal is taken.
-
-### S29. Robustness and information leaks
-`bug` · low · **open**
-
-- **Where:** `WWCP_POI/WWCP_POI3/DataStructures/POIEffectiveTree.cs:365,468-476`,
-  `Proofs/RoamingNetworkProof.cs:354,524` (an `@size`/`@index` above Int64, which Newtonsoft reads as a `BigInteger`,
-  throws out of `Value<Decimal>()`, an object `@id` out of `Value<String>()`, both out of `Verify`);
-  `History/RoamingNetworkHistory.cs:932,1107,1258`, `.Attestations.cs:148`, `.PendingChangeSets.cs:391,476,595`,
-  `.PriceStatements.cs:694` (store exception text with file paths in 422/WS errors); `WWCP_Node` signed log
-  `Logging/SignedLog.cs:312-330` (a backward clock step across UTC midnight makes the log read as tampered);
-  `NodeHTTPAPI.Log.cs:67` and `RoamingHub` (`ToReadTheLog` null: any signed-in account reads the full debug log);
-  proof child-array completeness is not exposed (`RoamingNetworkProof.cs:772-818,1108-1119`: `Given` returns the
-  entities of complete and partial arrays alike), so an app may be shown fewer EVSEs, miss a tariff, or miss the model,
-  release or certificate a station or meter names; one trusted attester can evict others' attestations
-  (`History/RoamingNetworkHistory.Attestations.cs:44,276-277,521-525`).
-- **Fix:** range/type-check before `Value<…>()` and return false; return generic error text and log details; order the
-  signed log by id, not file name; add a `log:read` permission; expose per-array completeness in proofs; cap
-  attestations per holder.
 
 ### S30. Informative (no change needed, or defence in depth)
 `docs` · info
