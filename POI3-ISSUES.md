@@ -217,6 +217,17 @@ verifies, a signature in an algorithm the epoch does not accept (11.3), a signed
 signed in the required roles by signatures that verify (`CarriesRequiredSignatures`). SPECIFICATION.md 10.2 and 10.5.
 Test: `CheckpointTests.A_checkpoint_is_taken_with_the_signatures_that_verify_here`.
 
+**S40 found and fixed on 2026-11-06** (WWCP_POI `b43ff1a`), found comparing with WWCP_POI.TS: C# read a commit or
+checkpoint signature in forms TS refuses, so the two readers did not take the same histories. A signature naming
+another property was read, that property signed by nobody and passed on by anyone; a `signer` that is a number or
+null was read; a signature embedded in a commit or a checkpoint naming its `@context` was read; and the commit of a
+snapshot, anchored or not, and a peer's join from a checkpoint, took signatures of it and of its change set in an
+algorithm the epoch does not accept, which every commit taken later refuses. Now all four are refused
+(`RoamingNetworkCommitSignature.TryParse` with `Embedded`, `CommitSignatureAlgorithmError` in `TryFromSnapshot`);
+a signature on its own may still name its context. SPECIFICATION.md 5.4. Tests:
+`SignatureFormTests.A_signature_is_read_in_its_one_form`,
+`EpochTests.The_commit_of_a_snapshot_is_signed_in_algorithms_of_its_epoch`.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
