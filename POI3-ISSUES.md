@@ -191,16 +191,19 @@ the documentation name their ids so; WWCP_POI.TS and the vectors of WWCPPOIConfo
   consumer's last pull, e.g. OCPI `date_from`; the OCPI export should take the time the hub saw a change.
 - S24: a party has at most `MaxPendingChangeSetsPerParty` (50) change sets waiting, counted for the party of the first
   signature of each one, and a change set waits `PendingChangeSetExpiry` (30 days) at most, from when it came, kept in
-  the store as `since` (this replaces the "no expiry" of 2026-10-22); the bound of 1000 stays. A commit or checkpoint
-  keeps one signature of each key in each role, the first (`IsOfTheSameKeyAndRoleAs`), and a signature counts for a
-  required role only by a key the version lets sign in it: a signing key certified for the RNO, or one of the
+  the store as `since` (this replaces the "no expiry" of 2026-10-22); the bound of 1000 stays. A server adding
+  signatures to a commit or checkpoint it holds takes one of each key in each role, the first
+  (`IsOfTheSameKeyAndRoleAs`); a commit or checkpoint read keeps all it comes with, and each is verified (WWCP_POI
+  `f7b8643`, as WWCP_POI.TS; reading took one of each as well before and dropped a forged one unseen). A signature
+  counts for a required role only by a key the version lets sign in it: a signing key certified for the RNO, or one of the
   charging station operator its `signer` names (`RoamingNetworkCommitSignatureRoles.KeyMaySignIn`); leaders and
   witnesses stay the verifier's to judge. SPECIFICATION.md 4.2 and 5.4.
 - S26: a withdrawn change set, or one rebased from it, is refused again, waiting or committed at once, until the
   version it was made for is too old for a change set anyway, so the withdrawals kept bound themselves; they are kept
   in the store (`pendingChangeSetWithdrawn`) and survive a restart. Submitted again, a change set needs new
   signatures. The key of a withdrawal is checked when the server takes it as well. SPECIFICATION.md 4.2.
-Tests: `PendingChangeSetBoundsTests`, `LastChangeTests`, `SignatureTwinTests.A_commit_keeps_one_signature_per_key_and_role`.
+Tests: `PendingChangeSetBoundsTests`, `LastChangeTests`, `SignatureTwinTests.A_commit_keeps_one_signature_per_key_and_role`,
+`SignatureTwinTests.A_commit_read_keeps_its_signatures_and_each_is_checked`.
 
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
