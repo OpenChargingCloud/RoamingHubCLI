@@ -205,6 +205,18 @@ the documentation name their ids so; WWCP_POI.TS and the vectors of WWCPPOIConfo
 Tests: `PendingChangeSetBoundsTests`, `LastChangeTests`, `SignatureTwinTests.A_commit_keeps_one_signature_per_key_and_role`,
 `SignatureTwinTests.A_commit_read_keeps_its_signatures_and_each_is_checked`.
 
+**S39 found and fixed on 2026-11-06** (WWCP_POI `399b7c8`), as the maintainer chose: a history took a checkpoint
+of another server only when every signature of it verified there, so one signature it did not verify refused the
+checkpoint: anyone passing it on with a signature added blocked it, and so did a witness one server trusts and another
+one does not, whose checkpoints that one never took; WWCP_POI.TS and the proofs pass such signatures over. Now a
+checkpoint is taken with the signatures that verify there, one of each key and role, the others left out and refusing
+nothing (`TryAddCheckpoint`, `RoamingNetworkCheckpoint.WithSignaturesOnly`); a forged one before a genuine one of the
+same key and role keeps it from nothing. Refused still: a checkpoint not signed in a required role by one that
+verifies, a signature in an algorithm the epoch does not accept (11.3), a signed one without a verifier.
+`TryAddCheckpointSignatures` adds those that verify and is refused only when none does; a peer joins from a checkpoint
+signed in the required roles by signatures that verify (`CarriesRequiredSignatures`). SPECIFICATION.md 10.2 and 10.5.
+Test: `CheckpointTests.A_checkpoint_is_taken_with_the_signatures_that_verify_here`.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
