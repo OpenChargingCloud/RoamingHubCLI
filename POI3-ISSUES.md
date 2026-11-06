@@ -226,7 +226,10 @@ algorithm the epoch does not accept, which every commit taken later refuses. Now
 (`RoamingNetworkCommitSignature.TryParse` with `Embedded`, `CommitSignatureAlgorithmError` in `TryFromSnapshot`);
 a signature on its own may still name its context. SPECIFICATION.md 5.4. Tests:
 `SignatureFormTests.A_signature_is_read_in_its_one_form`,
-`EpochTests.The_commit_of_a_snapshot_is_signed_in_algorithms_of_its_epoch`.
+`EpochTests.The_commit_of_a_snapshot_is_signed_in_algorithms_of_its_epoch`. Since WWCP_POI `7c6f91c` a
+signature is also refused in the words of WWCP_POI.TS, in its order, and a snapshot names why its commit is refused
+("Invalid commit of the snapshot: …"); all 1879 ZProbeRequiredRoles cases give the same verdict in the same words.
+Test: `SignatureFormTests.A_signature_is_refused_in_the_words_of_WWCP_POI_TS`.
 
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
