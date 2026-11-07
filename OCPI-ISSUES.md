@@ -88,6 +88,11 @@ be used, not when the party's first token may (2.2.1, 2.3.0, 3.0, and 2.1.1, whi
 its JSON. `CredentialsAccessTests` of each 2.x version and 3.0's `VersionsListTests`,
 `TheRequestNamesTheValidityOfTheTokenItCameWith`.
 
+**O13 fixed on 2026-11-07** (WWCP_OCPI `114115ce`): the 2.2.1 and 2.3.0 POI3 publishers date a tariff, a location and
+an EVSE status they store with the time they store it, ms-truncated, or 1 ms after the one stored before where that is not
+earlier; what did not change keeps the stored one. A change committed long after its `createdAt` is no longer dated before a
+pull with `date_from` had passed. The mappers are unchanged. `POI3AdapterTests.WhatIsPublishedIsDatedWhenItIsStored`.
+
 Items marked **needs a design decision** wait on the maintainer. Severity as in POI3-ISSUES.md.
 
 
@@ -122,22 +127,6 @@ Items marked **needs a design decision** wait on the maintainer. Severity as in 
   every other 2.1.1 route ("Unknown access token!").
 - **Fix:** either 2.1.1 reads tokens as their setting says, as 2.2.1 does, or the setting is ignored for 2.1.1 in
   the base API too (2.1.1 tokens are raw by the standard).
-
-
-### O13. The POI3 publisher dates what it serves by the signer's time, which a pull with `date_from` may have passed
-`bug` · low · **open** (found 2026-11-05, with POI3-ISSUES.md S5) · hub not exposed (it runs no publisher)
-
-- **Where:** the `last_updated` of a location, an EVSE and a tariff is the POI `lastChange`
-  (`WWCP_OCPIv2.2.1_Adapter/POI3/POI3Mapper.cs:252-258`, `:371`, `:473`, `:507`; 2.3.0 `POI3Mapper.cs:269-275`,
-  `:398`, `:528`, `:580`), or 1 ms after the one stored where that is not later
-  (`WWCP_OCPIv2.2.1_Adapter/POI3/POI3ToOCPIPublisher.cs:298`, `:332`, `:445`; 2.3.0 `:381`, `:414`, `:472`, `:602`).
-- **Problem:** `lastChange` is the stamp of a change set: its `createdAt`, which its signer chooses, no earlier than
-  the version before since WWCP_POI `12e993a` (S5). A change committed long after its `createdAt` - a change set
-  waiting days for co-signatures, a branch merged later - reaches the publisher with a `last_updated` before the time
-  an EMSP last pulled `GET locations?date_from=` (`WWCP_OCPIv2.2.1/CPO/CPO_HTTPAPI.cs:2291`, tariffs `:2823`; 2.3.0
-  `:2675`, `:3191`): pulling on from then, it never sees the change.
-- **Fix:** the publisher stamps what it stores with the time it saw the change, the commit coming in, or the POI
-  `lastChange` where that is later, and keeps the stored one for what did not change; the mapper takes that time.
 
 
 ## Checked, fixed
