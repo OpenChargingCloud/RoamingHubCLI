@@ -231,6 +231,17 @@ signature is also refused in the words of WWCP_POI.TS, in its order, and a snaps
 ("Invalid commit of the snapshot: …"); all 1879 ZProbeRequiredRoles cases give the same verdict in the same words.
 Test: `SignatureFormTests.A_signature_is_refused_in_the_words_of_WWCP_POI_TS`.
 
+**S41 found and fixed on 2026-11-08** (WWCP_POI `e76e5d0`), found by the probes of WWCP_POI.TS: an operator took a
+charging station given in two of its charging pools, or an EVSE given in two of its charging stations, and its index
+kept the first. Its refusals caught the exception of `ImmutableDictionary.CreateRange`, which throws only for a key
+given twice with values that are not equal, and charging stations, EVSEs and energy meters are equal by their
+identifications alone, so they were never reached. Proofs, price statements and evidence name them by their
+identifications alone, so they could not say which of the two was meant; WWCP_POI.TS refuses both. Now the indexes
+refuse an identification given twice and name it ("The charging station '...' of the operator '...' must not be
+given twice!", the same for an EVSE and an energy meter), and a network holding one is refused when it is read.
+With Hermod `f7b00ef2`, data license identifications that differ in case only are found twice too: they compared
+without case but hashed with it. Test: `InfrastructureTests.A_station_an_EVSE_or_a_meter_is_given_once_per_operator`.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
 
