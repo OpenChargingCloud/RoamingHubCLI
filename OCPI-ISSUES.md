@@ -93,40 +93,47 @@ an EVSE status they store with the time they store it, ms-truncated, or 1 ms aft
 earlier; what did not change keeps the stored one. A change committed long after its `createdAt` is no longer dated before a
 pull with `date_from` had passed. The mappers are unchanged. `POI3AdapterTests.WhatIsPublishedIsDatedWhenItIsStored`.
 
+**O8 fixed on 2026-11-07** (WWCP_OCPI `326690ef`): 3.0 registers the routes of its own version, as 2.x do - `versions/3.0`
+and `v3.0/credentials`, no longer `versions/{versionId}` and `{versionId}/credentials`. Run with 2.2.1 on one HTTP API
+and below one path, as a platform serving both has them, Hermod asks a literal route before a template: 2.2.1 was not
+shadowed. But 3.0 answered the credentials of every version served by none - `GET v2.1.1/credentials` with a 3.0 token
+was given 3.0's credentials, and a POST there would have registered the peer with 3.0. The details of another version
+were refused before as well. `WWCP_OCPI_Tests/SharedHTTPAPI/VersionRoutesTests.cs`. Found with it: O14.
+
+**O12 fixed on 2026-11-07** (WWCP_OCPI `5cc89ad5`), as the maintainer chose: 2.1.1's routes read a token as it was sent
+and BASE64-decoded, and take it in the reading that is the token of a party - as the versions list of the base API
+reads it, which does not ask the setting either (the finding said it did). A token sent BASE64-encoded, as our clients
+send it where the party says nothing (`?? true`), is let in at every route of 2.1.1; one sent as it is, as 2.1.1 has
+it, still is. Reading it only as the setting says, as 2.2.1 and 2.3.0 do, was not taken: a 2.1.1 peer sending its token
+as the standard has it, added without a setting, would have been shut out. 2.1.1's `CredentialsAccessTests`,
+`ATokenSentBASE64EncodedIsLetInAtTheRoutesOfThisVersion`, `ATokenSentAsItIsIsLetInWhateverItsAccessSays`.
+
+**O9 fixed on 2026-11-07** (WWCP_OCPI `a575f8ec`): 3.0's `RemovedAtOnceTests` read the lines files have from before - a
+`removeToken` line of a token status, `removeAllTokens` and `removeAllTokenStatus`, `removeAllSessions` and
+`removeAllChargeDetailRecords` without a list - and 3.0 has `CredentialsAccessTests` as 2.x have them (the validity of
+the token a request came with stays in `VersionsListTests`). `addRemoteSessionIfNotExists` is kept, and written now:
+`AddRemoteSessionIfNotExists` of 2.2.1's EMSP and HUB APIs wrote `addRemoteSession`, and `AddRemoteLocationIfNotExists`
+wrote `addRemoteLocation`, so the two lines the next start reads for them were written by nobody. They write their own,
+as tariffs and CDRs do; 2.2.1's `RemoteCPOFileTests`, `ARemoteLocationAddedIfNotThereIsThereAtTheNextStart`,
+`ARemoteSessionAddedIfNotThereIsThereAtTheNextStart`.
+
 Items marked **needs a design decision** wait on the maintainer. Severity as in POI3-ISSUES.md.
 
 
 ## Low
 
-### O8. OCPI 3.0 registers its routes as templates of the version id
-`bug` · low · **open; not verified by running** (found 2026-10-24) · hub not exposed
+### O14. OCPI 3.0 puts no path of the base API before its own
+`design` · low · **needs a design decision** (found 2026-11-07, with O8) · hub not exposed (it serves no 3.0)
 
-- **Where:** `WWCP_OCPIv3.0/Common/CommonAPI.cs:2038`, `:2068` (`"versions/{versionId}"`), `:2384`, `:2458`, `:2550`,
-  `:2598`, `:2675` (`"{versionId}/credentials"`); only version details checks the id (`:2133`).
-- **Problem:** on an HTTP API shared with 2.x, `{versionId}/credentials` matches every `X/credentials`; depending on
-  how Hermod orders a literal against a parameter it shadows the 2.x routes or is refused as ambiguous.
-- **Fix:** literals like 2.x: `$"versions/{Version.Id}"`, `$"{Version.Id}/credentials"`.
-
-### O9. Untested replay of asset lines
-`test-coverage` · low · **open**
-
-- **Where:** 3.0 `removeToken` lines of a token status (`WWCP_OCPIv3.0/Common/CommonAPI.cs:4247-4270`; the test
-  `WWCP_OCPIv3.0_Tests/CommonTests/RemovedAtOnceTests.cs:121` covers only the new format), 3.0 `removeAll*` lines
-  without a list (`:4078-4082`, `:4296-4301`, `:4490-4494`), `addRemoteSessionIfNotExists`
-  (`WWCP_OCPI_Common/HTTP/CommonHTTPAPI.cs:224`, `WWCP_OCPIv2.2.1/Common/RemoteCPOAssets.cs:597-625`; nobody writes
-  it). 3.0 has no `CredentialsAccessTests` either (2.1.1, 2.2.1 and 2.3.0 have them).
-- **Fix:** a test per case, written as the lines are found in old files; drop `addRemoteSessionIfNotExists` if
-  nothing is to write it.
-
-### O12. 2.1.1's routes take a token as it is, whatever is set for it
-`design` · low · **needs a design decision** (found 2026-10-29, with O6)
-
-- **Where:** `WWCP_OCPIv2.1.1/IO/OCPIRequest.cs` reads no Base64; the shared `/versions` of the base API honours
-  `AccessTokenIsBase64Encoded`.
-- **Problem:** a 2.1.1 local token set to be sent Base64 is let in at `/versions` and refused at `versions/2.1.1` and
-  every other 2.1.1 route ("Unknown access token!").
-- **Fix:** either 2.1.1 reads tokens as their setting says, as 2.2.1 does, or the setting is ignored for 2.1.1 in
-  the base API too (2.1.1 tokens are raw by the standard).
+- **Where:** `WWCP_OCPIv3.0/Common/CommonAPI.cs:1919` hands its base its `URLPathPrefix` alone, and lists its version at
+  `URLPathPrefix + AdditionalURLPathPrefix + "/versions/3.0"` (`:1976`); 2.x hand theirs `BaseAPI.URLPathPrefix +
+  URLPathPrefix` and list it there (`WWCP_OCPIv2.2.1/Common/CommonAPI.cs:2255`, `:2309`; 2.1.1 and 2.3.0 alike).
+- **Problem:** a `URLPathPrefix` is a path below the base API's in 2.x and a whole path in 3.0. On a base API with
+  `RootPath` "/ocpi", 2.2.1 given "/ocpi" serves at "/ocpi/ocpi/versions/2.2.1", 3.0 given "/ocpi" at
+  "/ocpi/versions/3.0"; given none, 2.x serve below "/ocpi" and 3.0 at the root. The tests of each version give
+  "/ocpi/v<version>", so 2.x serve theirs below "/ocpi/ocpi" and nobody notices, as the URLs are followed.
+- **Fix:** 3.0 puts the base API's path before its own, as 2.x do - where a 3.0 API is served moves unless its caller
+  gives the path without the base API's - or 2.x take theirs whole, as 3.0 does.
 
 
 ## Checked, fixed
