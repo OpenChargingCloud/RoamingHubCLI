@@ -117,23 +117,19 @@ wrote `addRemoteLocation`, so the two lines the next start reads for them were w
 as tariffs and CDRs do; 2.2.1's `RemoteCPOFileTests`, `ARemoteLocationAddedIfNotThereIsThereAtTheNextStart`,
 `ARemoteSessionAddedIfNotThereIsThereAtTheNextStart`.
 
+**O14 fixed on 2026-11-08** (WWCP_OCPI `b04c176d`), as the maintainer chose: 3.0 puts the path of the base API before
+the one it is given, as 2.x do (`BaseAPI.URLPathPrefix + URLPathPrefix`, in its routes and in the versions list), so a
+platform serving 2.x and 3.0 has them below one path. Given none, 3.0 was served and listed at the root of the HTTP
+API, beside the base API's path rather than below it. 3.0's own tests give "/v3.0" now in place of "/ocpi/v3.0" and are
+served where they were; those of 2.x still give "/ocpi/v<version>" and are served below "/ocpi/ocpi".
+`WWCP_OCPI_Tests/SharedHTTPAPI/VersionRoutesTests.cs` runs 2.2.1 and 3.0 given no path and given the same one.
+
 Items marked **needs a design decision** wait on the maintainer. Severity as in POI3-ISSUES.md.
 
 
 ## Low
 
-### O14. OCPI 3.0 puts no path of the base API before its own
-`design` · low · **needs a design decision** (found 2026-11-07, with O8) · hub not exposed (it serves no 3.0)
-
-- **Where:** `WWCP_OCPIv3.0/Common/CommonAPI.cs:1919` hands its base its `URLPathPrefix` alone, and lists its version at
-  `URLPathPrefix + AdditionalURLPathPrefix + "/versions/3.0"` (`:1976`); 2.x hand theirs `BaseAPI.URLPathPrefix +
-  URLPathPrefix` and list it there (`WWCP_OCPIv2.2.1/Common/CommonAPI.cs:2255`, `:2309`; 2.1.1 and 2.3.0 alike).
-- **Problem:** a `URLPathPrefix` is a path below the base API's in 2.x and a whole path in 3.0. On a base API with
-  `RootPath` "/ocpi", 2.2.1 given "/ocpi" serves at "/ocpi/ocpi/versions/2.2.1", 3.0 given "/ocpi" at
-  "/ocpi/versions/3.0"; given none, 2.x serve below "/ocpi" and 3.0 at the root. The tests of each version give
-  "/ocpi/v<version>", so 2.x serve theirs below "/ocpi/ocpi" and nobody notices, as the URLs are followed.
-- **Fix:** 3.0 puts the base API's path before its own, as 2.x do - where a 3.0 API is served moves unless its caller
-  gives the path without the base API's - or 2.x take theirs whole, as 3.0 does.
+None open.
 
 
 ## Checked, fixed
