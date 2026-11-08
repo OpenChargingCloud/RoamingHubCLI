@@ -236,7 +236,8 @@ charging station given in two of its charging pools, or an EVSE given in two of 
 kept the first. Its refusals caught the exception of `ImmutableDictionary.CreateRange`, which throws only for a key
 given twice with values that are not equal, and charging stations, EVSEs and energy meters are equal by their
 identifications alone, so they were never reached. Proofs, price statements and evidence name them by their
-identifications alone, so they could not say which of the two was meant; WWCP_POI.TS refuses both. Now the indexes
+identifications alone, so they could not say which of the two was meant. WWCP_POI.TS took them too and follows
+with the same refusals. Now the indexes
 refuse an identification given twice and name it ("The charging station '...' of the operator '...' must not be
 given twice!", the same for an EVSE and an energy meter), and a network holding one is refused when it is read.
 With Hermod `f7b00ef2`, data license identifications that differ in case only are found twice too: they compared
