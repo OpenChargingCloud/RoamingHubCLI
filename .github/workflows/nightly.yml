@@ -96,9 +96,18 @@ jobs:
       # dump of its process beside the results: on 2026-10-20 one of WWCP_Core's
       # ran for 49 minutes on the Windows leg, its own ten-second timeout firing
       # that late - the whole process was out of threads, and nothing said why.
+      #
+      # A test host that dies is dumped as it dies, beside the Sequence file:
+      # a minidump, as in the other CLIs' nightlies, since the full dump above
+      # is for a process that has run out of threads. On 2026-11-04 Hermod's
+      # test host died once in four full runs on a loaded Windows machine,
+      # during Generate_RSA_ServerCertificate_Direct_Test, with no stack and no
+      # reason after "crashed"; it did not come back alone or in the whole
+      # suite again. The test named is only the one that was running, so the
+      # next time the dump is all there is to go on.
       - name: Test everything, as pinned
         timeout-minutes: 120
-        run: dotnet test RoamingHubCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --blame-hang-timeout 10m --blame-hang-dump-type full --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}.trx" --results-directory artifacts
+        run: dotnet test RoamingHubCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --blame-hang-timeout 10m --blame-hang-dump-type full --blame-crash --blame-crash-dump-type mini --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}.trx" --results-directory artifacts
 
       # The same start as in ci.yml, for the same reason and on the same leg.
       # Repeating it costs a minute and catches the kind of failure that only
@@ -241,10 +250,11 @@ jobs:
           name: test-results-${{ matrix.leg }}
           path: artifacts/*.trx
 
-      # What --blame-hang left of a hung test: the dump of its process and the
-      # sequence of the tests it ran. Only on a night that has one, and kept a
-      # week - a full dump is hundreds of megabytes.
-      - name: Upload hang dumps
+      # What --blame-hang and --blame-crash left of a hung or crashed test: the
+      # dump of its process and the sequence of the tests it ran. Only on a
+      # night that has one, and kept a week - a full hang dump is hundreds of
+      # megabytes.
+      - name: Upload hang and crash dumps
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
@@ -327,11 +337,16 @@ jobs:
         continue-on-error: true
         run: dotnet build RoamingHubCLI.slnx --configuration Release
 
+      # A hung test named after ten minutes and a crashed one as it dies, as in
+      # "Test everything, as pinned". No hang dump: nothing is uploaded from
+      # this job, so the name in the console is what is kept. A crash is dumped
+      # all the same - --blame-crash knows no dump type "none" - and the dump
+      # stays on the runner.
       - name: Test against the tips (informational)
         if: steps.build.outcome == 'success'
         continue-on-error: true
         timeout-minutes: 120
-        run: dotnet test RoamingHubCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --logger "console;verbosity=normal"
+        run: dotnet test RoamingHubCLI.slnx --configuration Release --no-build --filter "TestCategory!=LiveDNS&TestCategory!=External&TestCategory!=LiveNetwork" --blame-hang-timeout 10m --blame-hang-dump-type none --blame-crash --blame-crash-dump-type mini --logger "console;verbosity=normal"
 
       - name: Say how it went
         if: ${{ !cancelled() }}
