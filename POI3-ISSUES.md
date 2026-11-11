@@ -243,8 +243,54 @@ given twice!", the same for an EVSE and an energy meter), and a network holding 
 With Hermod `f7b00ef2`, data license identifications that differ in case only are found twice too: they compared
 without case but hashed with it. Test: `InfrastructureTests.A_station_an_EVSE_or_a_meter_is_given_once_per_operator`.
 
+**E2 to E5 found and fixed on 2026-11-11** (WWCP_POI `6c404eb`, on its master targeting .NET 11; pinned here with the
+move of the superproject to .NET 11), in a review of the EV Taler offers of phase 3, `WWCP_POI3_EVTaler` at WWCP_POI
+`62390ca`:
+
+- **E2**, medium: the open sessions of a client were counted by the TCP peer
+  (`WWCP_POI3_EVTaler/Offers/EVTalerOffersAPI.cs`), so that behind a reverse proxy four anonymous sessions shut every
+  client out, and an IPv6 host had addresses without end; every start proved the station, checking its signatures,
+  before its limits refused it. Now a client is counted as `POI_API` counts its heavy reads (`ClientKeyOf`, public):
+  by its address, an IPv6 one by its /64, behind a trusted proxy the one `ClientAddressOf` says; the limits come
+  before the proof, and the proof takes one of the client's heavy reads (`TooManyHeavyReads`, public).
+- **E3**, low: every session was kept seven days after its settlement, with its client's address, the station proof
+  and the price statements, also one in which nothing was paid. Now one settled without a step paid is kept ten
+  minutes, at most 100,000 sessions are held (the settled ones settled first are forgotten beyond, never an open one),
+  and a settled session keeps neither its client nor the proof and the price statements.
+- **E4**, low: a 502 told the anonymous client what failed at the operator: exceptions of the backend and of the
+  charging station management system, the merchant backend's host and port, up to 200 characters of its answer; so
+  did the event `stopped` when charging failed to start after step 1 was paid, and the reason of a refund. Now the
+  client is told that the systems of the operator failed, or an offer of step 1 refused in the words of the server's
+  check; what failed goes to `OnError`.
+- **E5**, low: an exception while the payment of a step was waited for left the step open for good, and with it the
+  session and its EVSE until a restart. Now the watch always ends its step: unpaid once the merchant backend says so
+  after the deadline, or ten minutes after it, reported; a step paid while the merchant backend was not reached
+  counts once it is reached again.
+
+Tests, `EVTalerOffersTests`: `The_limits_count_a_client_as_the_heavy_reads_do`,
+`Starting_a_session_takes_a_heavy_read_after_the_limits`, `What_fails_at_the_operator_is_reported_not_told_to_the_driver`,
+`Sessions_without_a_payment_are_forgotten_soon`, `A_payment_watch_that_fails_still_ends_the_step`,
+`A_step_paid_while_the_merchant_backend_was_not_reached_counts`; 14 of 14 mutations of the fixes are caught.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
+
+
+## Medium
+
+### E1. An EVSE held without paying
+`WWCP_POI/WWCP_POI3_EVTaler/Offers/EVTalerOffersAPI.cs` · medium · **needs a design decision**
+
+Found on 2026-11-11 in the review of the EV Taler offers. A session holds its EVSE from its start (`sessionAtEVSE`),
+asked for anonymously, before step 1 is paid: for the payment deadline of step 1 (`FirstPayDeadline`, two minutes) and
+the merchant backend's latency. The driver at the EVSE gets 409. Once step 1 expires and the session ends, the next one
+can be asked for at once. The 409 of `WhyNotStart` ("no vehicle is plugged in") tells the moment a vehicle arrives:
+asking every second wins against any app, and with `*` for CORS any web page can ask from the browsers of its
+visitors, each with an address of its own, so that the limits per client of E2 do not stop it. Proposed: "who pays
+first charges", offers of step 1 to several sessions at an EVSE and the EVSE held only once step 1 is paid
+(`WhyNotStart` asked again before charging), the others expiring or refunded in full; or a code shown at the station
+that proves the driver is there. `Sessions_are_refused_where_they_are_not_made` (201, then 409 at the same EVSE) and
+`A_step_not_paid_ends_the_session` show the behaviour. Open point 11 of `concepts/EVTaler.md`.
 
 
 ## Low
