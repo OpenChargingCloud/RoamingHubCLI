@@ -281,7 +281,10 @@ dynamic QR code OCPP 2.1's `WebPaymentsCtrlr` makes, shown on a display or given
 the client, before anything is held, ordered or asked of the charging station management system, the backend checks
 it with the web payments of the EVSE (`IEVTalerBackend.IsCurrentTOTP`, `IEVTalerChargingControl.WebPaymentsOf`,
 `EVTalerWebPayments` with Hermod's `TOTPGenerator`); without it, or with one wrong or too old, the answer is 403 alike,
-and not even a session held at the EVSE is told. The check keeps no state: a password is current in its time slot and
+and not even a session held at the EVSE is told; never 401 (decision D9, WWCP_POI `487cb65`): RFC 9110 lets a server
+answer 401 only with a `WWW-Authenticate` header naming a challenge, an authentication scheme whose credentials go in
+the `Authorization` header, and the password is a part of the body that no scheme carries. The check keeps no state: a
+password is current in its time slot and
 the ones beside it; against one passed on helps a short validity time the operator sets, down to 1 s; taking
 each only once would lose those of requests lost to a network failure. Neither
 "who pays first charges" nor a static code takes its place: a pool naming the payment option `EVTaler`, as it is at
