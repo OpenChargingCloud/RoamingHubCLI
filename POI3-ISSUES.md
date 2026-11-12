@@ -272,25 +272,30 @@ Tests, `EVTalerOffersTests`: `The_limits_count_a_client_as_the_heavy_reads_do`,
 `Sessions_without_a_payment_are_forgotten_soon`, `A_payment_watch_that_fails_still_ends_the_step`,
 `A_step_paid_while_the_merchant_backend_was_not_reached_counts`; 14 of 14 mutations of the fixes are caught.
 
+**E1 decided and fixed on 2026-11-12** (WWCP_POI `76d3653`), as the maintainer chose (decision D8 of
+`concepts/EVTaler.md`), found in the same review, medium: a session held its EVSE from its start, asked for
+anonymously, before step 1 was paid, for the payment deadline of step 1; once it ended, the next one could be asked for
+at once, and the 409 of `WhyNotStart` told the moment a vehicle arrived, from the browsers of any web page's visitors
+too. Now every session names the time-based one-time password its EVSE gives right then, in the URL of the secure
+dynamic QR code OCPP 2.1's `WebPaymentsCtrlr` makes, shown on a display or given over BLE or NFC. After the limits of
+the client, before anything is held, ordered or asked of the charging station management system, the backend checks
+it with the web payments of the EVSE (`IEVTalerBackend.IsCurrentTOTP`, `IEVTalerChargingControl.WebPaymentsOf`,
+`EVTalerWebPayments` with Hermod's `TOTPGenerator`); without it, or with one wrong or too old, the answer is 403 alike,
+and not even a session held at the EVSE is told. The check keeps no state: a password is current in its time slot and
+the ones beside it; against one passed on helps a short validity time the operator sets, down to 1 s; taking
+each only once would lose those of requests lost to a network failure. Neither
+"who pays first charges" nor a static code takes its place: a pool naming the payment option `EVTaler`, as it is at
+runtime, names the authentication mode `SecureDynamicQRCode` with its `channels` (`BLE`, `Display`, `NFC`), and a
+change set leaving one without it is refused. Still open: where the URL of the code leads (open point 11 of
+`concepts/EVTaler.md`), and `IEVTalerChargingControl` at the charging station management system of CSMSCLI. Tests:
+`EVTalerOffersTests.A_session_needs_the_one_time_password_the_EVSE_gives_right_then`,
+`Where_the_one_time_password_is_not_checked_the_operator_is_told`,
+`A_one_time_password_is_current_in_its_slot_and_the_ones_beside_it`,
+`EVTalerTests.A_secure_dynamic_QR_code_names_its_channels`,
+`The_payment_option_EVTaler_needs_a_secure_dynamic_QR_code`; 23 of 23 mutations of the fix are caught.
+
 Items marked **needs a design decision** wait on the maintainer. Severity: **critical** means the trust model is
 broken; **high** means wrong results, a freeze or a denial of service; **medium** and **low** as usual.
-
-
-## Medium
-
-### E1. An EVSE held without paying
-`WWCP_POI/WWCP_POI3_EVTaler/Offers/EVTalerOffersAPI.cs` · medium · **needs a design decision**
-
-Found on 2026-11-11 in the review of the EV Taler offers. A session holds its EVSE from its start (`sessionAtEVSE`),
-asked for anonymously, before step 1 is paid: for the payment deadline of step 1 (`FirstPayDeadline`, two minutes) and
-the merchant backend's latency. The driver at the EVSE gets 409. Once step 1 expires and the session ends, the next one
-can be asked for at once. The 409 of `WhyNotStart` ("no vehicle is plugged in") tells the moment a vehicle arrives:
-asking every second wins against any app, and with `*` for CORS any web page can ask from the browsers of its
-visitors, each with an address of its own, so that the limits per client of E2 do not stop it. Proposed: "who pays
-first charges", offers of step 1 to several sessions at an EVSE and the EVSE held only once step 1 is paid
-(`WhyNotStart` asked again before charging), the others expiring or refunded in full; or a code shown at the station
-that proves the driver is there. `Sessions_are_refused_where_they_are_not_made` (201, then 409 at the same EVSE) and
-`A_step_not_paid_ends_the_session` show the behaviour. Open point 11 of `concepts/EVTaler.md`.
 
 
 ## Low
