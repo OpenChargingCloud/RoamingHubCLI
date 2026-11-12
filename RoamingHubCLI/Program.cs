@@ -160,10 +160,6 @@ namespace cloud.charging.open.RoamingHub.CLI
             await using (hub)
             {
 
-                // What somebody signed in over SSH gets: this program's own command
-                // line, with its commands beside the node's.
-                hub.CommandLines = (terminal, caller) => new HubCLI(hub, terminal, caller);
-
                 if (hub.ImportCertificates(arguments, out _) is Int32 notImported)
                     return notImported;
 
