@@ -308,11 +308,19 @@ broken; **high** means wrong results, a freeze or a denial of service; **medium*
 `docs` · info
 
 - Production builds publish source maps (`RoamingHub/.../Frontend/webpack.config.js:41`), of code that is AGPL and
-  public anyway; the inherited `~/poi/serviceCheck` returns the machine name (`Hermod/Hermod/HTTP/HTTPAPI/HTTPAPI.cs:1222`),
-  left as it is, as Hermod's other programs serve it too; the Configuration page shows server file paths, machine and
-  OS (`RoamingHub/RoamingHub/RoamingHub.cs:579-584`), since `configuration:read` (`NodeHTTPAPI.cs:383`) to the roles
-  `viewer` and `hub` and administrators only, no longer to any signed-in account; outbound OCPI/Mobilithek TLS does no
-  revocation check (`CertificateRevocationCheckMode` of Hermod's `ATLSClient` is set nowhere): a check that is strict
-  would end the connections whenever an OCSP or CRL server is out of reach, so it waits for a switch per peer. The
-  Mobilithek `url` takes `https` alone since RoamingHub `68a94a5`. The frontend was clean of XSS (lit-html escapes; the
-  one `unsafeHTML` renders a regex-validated QR SVG), paths are pattern-checked, and the CLI reaches no shell.
+  public anyway; the inherited `~/poi/serviceCheck` returns the machine name (`Hermod/Hermod/HTTP/HTTPAPI/HTTPAPI.cs:1224`
+  and `:1309`), left as it is, as Hermod's other programs serve it too; the Configuration page shows server file paths,
+  machine and OS (`RoamingHub/RoamingHub/RoamingHub.cs:589-595`), since `configuration:read`
+  (`WWCP_Node/Web/NodeHTTPAPI.cs:383`) to the roles `viewer` and `hub` and administrators only, no longer to any
+  signed-in account. The Mobilithek `url` takes `https` alone since RoamingHub `68a94a5`. The frontend was clean of XSS
+  (lit-html escapes; the one `unsafeHTML` renders a regex-validated QR SVG), paths are pattern-checked, and the CLI
+  reaches no shell.
+- **Open:** outbound OCPI/Mobilithek TLS does no revocation check. The OCPI clients hand a
+  `CertificateRevocationCheckMode` through to Hermod's `ATLSClient` (`WWCP_OCPI_Common/HTTP/ACommonHTTPClient.cs:154`)
+  and nobody sets it; the Mobilithek push client builds its chain with `X509RevocationMode.NoCheck`
+  (`WWCP_DatexII_WebAPI/MobilithekPushClient.cs:494`). What held this back, a strict check ending the connections
+  whenever an OCSP or CRL server is out of reach, no longer does: since WWCP_Node `fed51a6` the node judges a server
+  with a lenient one (`JudgeServer`, `WWCP_Node/WWCPNode.ServerCertificates.cs`), which asks online for at most
+  `RevocationWait` (3 s), refuses what is revoked and does not hold an answer that did not come against the server.
+  It is used for the node's time and name servers ("nts", "dns") alone. To do: the hub's OCPI peers and the
+  Mobilithek judged the same way (WWCP_OCPI, WWCP_DatexII, RoamingHub). Rechecked 2026-11-13 at super `4fdb525`.
