@@ -289,8 +289,9 @@ the ones beside it; against one passed on helps a short validity time the operat
 each only once would lose those of requests lost to a network failure. Neither
 "who pays first charges" nor a static code takes its place: a pool naming the payment option `EVTaler`, as it is at
 runtime, names the authentication mode `SecureDynamicQRCode` with its `channels` (`BLE`, `Display`, `NFC`), and a
-change set leaving one without it is refused. Still open: where the URL of the code leads (open point 11 of
-`concepts/EVTaler.md`), and `IEVTalerChargingControl` at the charging station management system of CSMSCLI. Tests:
+change set leaving one without it is refused. The URL of the code leads to a web payment page of the charging station
+management system (decision D10 of 2026-11-13, WWCP_POI `76f9039`). Still open: that page and
+`IEVTalerChargingControl` at the charging station management system of CSMSCLI, neither built. Tests:
 `EVTalerOffersTests.A_session_needs_the_one_time_password_the_EVSE_gives_right_then`,
 `Where_the_one_time_password_is_not_checked_the_operator_is_told`,
 `A_one_time_password_is_current_in_its_slot_and_the_ones_beside_it`,
