@@ -442,7 +442,9 @@ its hub can do right then, and says what is missing. Where several decide, what
 the operator owns waits for the others: `roamingNetworks <id> pending` shows
 the change sets waiting, `approve <change set>` signs one, `refuse <change
 set>` withdraws it, and `restate` states the keys of the operator anew
-together before their statement ends.
+together before their statement ends. `roamingNetworkOperator rotate
+signingKey` renews the signing key of the hub there as well, alone, as each
+holder may; its identity key is not replaced while it holds it with others.
 
 Everything else in it comes as change sets its owners sign - the operator adds
 its charging pools - submitted by anybody to
