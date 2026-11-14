@@ -461,10 +461,11 @@ a change set may change is for its signatures to say, not for who sent it.
 Every commit is in the log, tagged `poi` and `commit`.
 [libs/WWCP_POI/examples](libs/WWCP_POI/examples/README.md) goes through it step
 by step, at the prompt or over SSH, in the web interface, over HTTP and in C#:
-[example 1](libs/WWCP_POI/examples/example1.md) the first start and the roaming
-network `QA`, [example 2](libs/WWCP_POI/examples/example2.md) the charging
-station operator `DE*GEF` added to it, and
-[example 3](libs/WWCP_POI/examples/example3.md) its two pools of a DC and an AC
+[example A1 with three hubs](libs/WWCP_POI/examples/gui/exampleA1.md) the
+roaming network `QA` and the hubs holding the keys of its operator,
+[example A2](libs/WWCP_POI/examples/exampleA2.md) the charging station operator
+`DE*GEF` and the manufacturers added to it, and
+[example A3](libs/WWCP_POI/examples/exampleA3.md) its two pools of a DC and an AC
 station each, their power and connectors from templates of their current, and
 the stations and the EVSEs grouped by their current.
 
