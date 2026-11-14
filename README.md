@@ -433,6 +433,13 @@ copy. A hub holding keys of the operator of what it follows signs its head, or
 a commit named, with `roamingNetworks <id> sign [<commit>]`: when told to, and
 never by itself.
 
+Several hubs operate one roaming network together, each holding one voice:
+`roamingNetworks <id> join` at a hub following asks to hold the keys of its
+operator as well, `roamingNetworks <id> admit <holder>` at every hub holding
+them admits it, `dismiss <holder>` and `resign` end it, and `roamingNetworks
+<id> shareholders` shows who holds them and what waits. Each command does what
+its hub can do right then, and says what is missing.
+
 Everything else in it comes as change sets its owners sign - the operator adds
 its charging pools - submitted by anybody to
 `COMMIT /poi/RNs/{id}/history/changeSets` or over the network's WebSocket: what
