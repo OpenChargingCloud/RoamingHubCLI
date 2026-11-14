@@ -416,6 +416,14 @@ by the key it replaces, and forgets the old one once no network names it any
 more; `roamingNetworkOperator name GraphDefined GmbH` renames it in all of
 them. Both are `poi:edit` as well.
 
+The keys of the hub name their holder, the organization the hub is: its
+operator's identification, unless the configuration file says `"holder"`
+before the first start. `roamingNetworkOperator holder GraphDefined` names
+another one, or one where the keys of an older hub name none, by a new
+identity key and a new signing key in every roaming network it operates. It is
+what several hubs operating one roaming network together are counted by, see
+`libs/RoamingHub/SHAREHOLDERS.md`.
+
 Everything else in it comes as change sets its owners sign - the operator adds
 its charging pools - submitted by anybody to
 `COMMIT /poi/RNs/{id}/history/changeSets` or over the network's WebSocket: what
