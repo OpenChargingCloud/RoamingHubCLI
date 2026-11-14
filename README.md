@@ -424,6 +424,13 @@ identity key and a new signing key in every roaming network it operates. It is
 what several hubs operating one roaming network together are counted by, see
 `libs/RoamingHub/SHAREHOLDERS.md`.
 
+`roamingNetworks follow <trust anchor>` follows a roaming network of another
+hub: a copy of it, taken only as its trust anchor lets it be trusted, kept
+current and served here, and changed from here by nobody. The trust anchor is
+the text of the QR code of its operator, or its URL, and names where the
+roaming network is; `roamingNetworks unfollow <id>` ends it and deletes the
+copy.
+
 Everything else in it comes as change sets its owners sign - the operator adds
 its charging pools - submitted by anybody to
 `COMMIT /poi/RNs/{id}/history/changeSets` or over the network's WebSocket: what
