@@ -429,7 +429,9 @@ hub: a copy of it, taken only as its trust anchor lets it be trusted, kept
 current and served here, and changed from here by nobody. The trust anchor is
 the text of the QR code of its operator, or its URL, and names where the
 roaming network is; `roamingNetworks unfollow <id>` ends it and deletes the
-copy.
+copy. A hub holding keys of the operator of what it follows signs its head, or
+a commit named, with `roamingNetworks <id> sign [<commit>]`: when told to, and
+never by itself.
 
 Everything else in it comes as change sets its owners sign - the operator adds
 its charging pools - submitted by anybody to
