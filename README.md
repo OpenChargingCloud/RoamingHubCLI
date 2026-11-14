@@ -449,7 +449,10 @@ signingKey` renews the signing key of the hub there as well, alone, as each
 holder may. `roamingNetworkOperator rotate identityKey` replaces its identity
 key there together with the others: each of its two changes waits until they
 agreed, `roamingNetworks <id> rekey <holder>` at their hubs, and the command
-asked again goes on where it was.
+asked again goes on where it was. The web interface does the same: what is
+followed and the operator this hub is stand below the list of the roaming
+networks, and who holds the keys of an operator, what waits for them and the
+change sets waiting on the page of each roaming network.
 
 Everything else in it comes as change sets its owners sign - the operator adds
 its charging pools - submitted by anybody to
