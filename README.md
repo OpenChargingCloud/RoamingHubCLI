@@ -413,8 +413,10 @@ hub makes of a network it operates.
 `roamingNetworkOperator rotate signingKey` (or `identityKey`) replaces a key of
 the hub by a new one in every roaming network it operates, each change signed
 by the key it replaces, and forgets the old one once no network names it any
-more; `roamingNetworkOperator name GraphDefined GmbH` renames it in all of
-them. Both are `poi:edit` as well.
+more. An identity key is replaced in two changes, the new one next to the old
+one and then the old one out, so that whoever follows a roaming network by its
+old trust anchor follows on. `roamingNetworkOperator name GraphDefined GmbH`
+renames the operator in all of them. Both are `poi:edit` as well.
 
 The keys of the hub name their holder, the organization the hub is: its
 operator's identification, unless the configuration file says `"holder"`
@@ -444,7 +446,10 @@ the change sets waiting, `approve <change set>` signs one, `refuse <change
 set>` withdraws it, and `restate` states the keys of the operator anew
 together before their statement ends. `roamingNetworkOperator rotate
 signingKey` renews the signing key of the hub there as well, alone, as each
-holder may; its identity key is not replaced while it holds it with others.
+holder may. `roamingNetworkOperator rotate identityKey` replaces its identity
+key there together with the others: each of its two changes waits until they
+agreed, `roamingNetworks <id> rekey <holder>` at their hubs, and the command
+asked again goes on where it was.
 
 Everything else in it comes as change sets its owners sign - the operator adds
 its charging pools - submitted by anybody to
