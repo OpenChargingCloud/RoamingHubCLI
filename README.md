@@ -438,7 +438,9 @@ configuration does the same at every start: `"follow": [ { "trustAnchor":
 "…", "hold": true } ]` follows a roaming network and, with `hold`, asks once
 to hold the keys of its operator as well, and `"url"` says where this hub is
 reached, which the roaming networks it makes and the trust anchors it serves
-name from then on.
+name from then on. `"signCommits"` beside a trust anchor says which commits
+the hub signs by itself there: `"approved"`, as said, `"none"`, or `"all"` it
+took into its copy.
 
 Several hubs operate one roaming network together, each holding one voice:
 `roamingNetworks <id> join` at a hub following asks to hold the keys of its
