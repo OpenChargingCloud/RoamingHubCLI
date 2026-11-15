@@ -433,7 +433,12 @@ the text of the QR code of its operator, or its URL, and names where the
 roaming network is; `roamingNetworks unfollow <id>` ends it and deletes the
 copy. A hub holding keys of the operator of what it follows signs its head, or
 a commit named, with `roamingNetworks <id> sign [<commit>]`: when told to, and
-by itself only the commit of a change set it signed.
+by itself only the commit of a change set it signed. The `poi` section of the
+configuration does the same at every start: `"follow": [ { "trustAnchor":
+"…", "hold": true } ]` follows a roaming network and, with `hold`, asks once
+to hold the keys of its operator as well, and `"url"` says where this hub is
+reached, which the roaming networks it makes and the trust anchors it serves
+name from then on.
 
 Several hubs operate one roaming network together, each holding one voice:
 `roamingNetworks <id> join` at a hub following asks to hold the keys of its
