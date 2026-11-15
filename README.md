@@ -441,8 +441,9 @@ operator as well, `roamingNetworks <id> admit <holder>` at every hub holding
 them admits it, `dismiss <holder>` and `resign` end it, and `roamingNetworks
 <id> shareholders` shows who holds them and what waits. Each command does what
 its hub can do right then, and says what is missing; somebody decides once per
-change at each hub, and what follows from that the hubs do by themselves,
-looking every minute. Where several decide, what
+change at each hub, and what follows from that the hubs do by themselves, as
+soon as the hub where the roaming network is made tells them that something
+waits. Where several decide, what
 the operator owns waits for the others: `roamingNetworks <id> pending` shows
 the change sets waiting, `approve <change set>` signs one, `refuse <change
 set>` withdraws it, and `restate` states the keys of the operator anew
