@@ -433,14 +433,16 @@ the text of the QR code of its operator, or its URL, and names where the
 roaming network is; `roamingNetworks unfollow <id>` ends it and deletes the
 copy. A hub holding keys of the operator of what it follows signs its head, or
 a commit named, with `roamingNetworks <id> sign [<commit>]`: when told to, and
-never by itself.
+by itself only the commit of a change set it signed.
 
 Several hubs operate one roaming network together, each holding one voice:
 `roamingNetworks <id> join` at a hub following asks to hold the keys of its
 operator as well, `roamingNetworks <id> admit <holder>` at every hub holding
 them admits it, `dismiss <holder>` and `resign` end it, and `roamingNetworks
 <id> shareholders` shows who holds them and what waits. Each command does what
-its hub can do right then, and says what is missing. Where several decide, what
+its hub can do right then, and says what is missing; somebody decides once per
+change at each hub, and what follows from that the hubs do by themselves,
+looking every minute. Where several decide, what
 the operator owns waits for the others: `roamingNetworks <id> pending` shows
 the change sets waiting, `approve <change set>` signs one, `refuse <change
 set>` withdraws it, and `restate` states the keys of the operator anew
