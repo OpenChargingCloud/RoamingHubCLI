@@ -1,5 +1,7 @@
 # RoamingHub - EV Roaming Hub
 
+![The EV charging test environment, the roaming hub (RN) highlighted](docs/EVChargingTestEnvironment.svg)
+
 [![CI](https://github.com/OpenChargingCloud/RoamingHubCLI/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenChargingCloud/RoamingHubCLI/actions/workflows/ci.yml)
 [![Nightly](https://github.com/OpenChargingCloud/RoamingHubCLI/actions/workflows/nightly.yml/badge.svg)](https://github.com/OpenChargingCloud/RoamingHubCLI/actions/workflows/nightly.yml)
 
