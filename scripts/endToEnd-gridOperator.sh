@@ -9,20 +9,18 @@
 # public halves of its keys are read off its JSON API, and the hub adds it as a
 # party, as the operator of the roaming network does: a change set signed by
 # the hub that waits for the signature of the grid operator's identity key, as
-# the proof that it holds it. That signature is made from the grid operator's
-# own key file by scripts/signChangeSet - the grid operator has no way to make
-# it itself yet - and sent to the hub. Then the grid operator publishes: it
-# reads the head of QA, signs one change set and COMMITs it. It is green when
-# the head of the hub has the grid operator with its point, a second
-# publication changes nothing, and a changed point is published as one more
-# revision.
+# the proof that it holds it. The grid operator's preview names that change
+# set as awaiting it, and the grid operator accepts it - signs it with its
+# identity key and sends the signature to the hub. Then the grid operator
+# publishes: it reads the head of QA, signs one change set and COMMITs it. It
+# is green when the head of the hub has the grid operator with its point, a
+# second publication changes nothing, and a changed point is published as one
+# more revision.
 #
 #   ROAMINGHUB_DLL    RoamingHubCLI.dll    (default: this repository's Release build)
 #   GRIDOPERATOR_DLL  GridOperatorCLI.dll  (default: ../GridOperatorCLI's Release build)
-#   SIGNER_DLL        signChangeSet.dll    (default: scripts/signChangeSet's Release build)
 #
 #   dotnet build RoamingHubCLI/RoamingHubCLI.csproj -c Release
-#   dotnet build scripts/signChangeSet/signChangeSet.csproj -c Release
 #   dotnet build ../GridOperatorCLI/GridOperatorCLI.slnx -c Release
 #
 # Ports 18357/22357 for the hub, 18133/22133 for the grid operator.
@@ -36,9 +34,8 @@ set -u
 here="$(cd "$(dirname "$0")/.." && pwd)"
 hub_dll="${ROAMINGHUB_DLL:-$here/RoamingHubCLI/bin/Release/net11.0/RoamingHubCLI.dll}"
 go_dll="${GRIDOPERATOR_DLL:-$here/../GridOperatorCLI/GridOperatorCLI/bin/Release/net11.0/GridOperatorCLI.dll}"
-signer_dll="${SIGNER_DLL:-$here/scripts/signChangeSet/bin/Release/net11.0/signChangeSet.dll}"
 
-for dll in "$hub_dll" "$go_dll" "$signer_dll"; do
+for dll in "$hub_dll" "$go_dll"; do
     if [ ! -f "$dll" ]; then
         echo "There is no $dll: build it first."
         exit 2
@@ -243,9 +240,7 @@ cp "$tmp/answer.json" "$tmp/gridOperator.json"
 # What the operator of a roaming network needs to add it: "party", handed over
 # as it is.
 party="$(sed -n 's/.*"party" *: *\({.*}\) *, *"changeable".*/\1/p' "$tmp/gridOperator.json")"
-key_dir="$(value directory "$tmp/gridOperator.json" | sed 's/\\\\/\\/g')"
 [ -n "$party" ] || fail "The grid operator said no party: $(head -c 800 "$tmp/gridOperator.json")"
-[ -f "$key_dir/identity-key.pem" ] || fail "The grid operator keeps no identity key in '$key_dir'."
 
 code="$(hub POST /api/v1/poi/RNs/QA/GOs "$party")"
 [ "$code" = 202 ] || fail "The hub did not add the grid operator, waiting for its identity key ($code): $(head -c 800 "$tmp/answer.json")"
@@ -255,24 +250,29 @@ change_set_id="$(value changeSetId "$tmp/party-pending.json")"
 [ -n "$change_set_id" ] || fail "Adding the grid operator said no change set: $(head -c 800 "$tmp/party-pending.json")"
 grep -q "identity key" "$tmp/party-pending.json" || fail "The change set does not wait for the identity key: $(head -c 800 "$tmp/party-pending.json")"
 
-# The signature of the identity key - made from the grid operator's own key
-# file, as the grid operator cannot sign a waiting change set itself - sent by
-# anybody, without signing in: whether it counts, the key decides.
-signatures="$(dotnet "$signer_dll" "$tmp/party-pending.json" "$key_dir/identity-key.pem" 2> "$tmp/signer.log")" ||
-    fail "No signature of the identity key was made: $(cat "$tmp/signer.log")"
+# The grid operator's preview names the change set as awaiting it.
+code="$(go GET /api/v1/roamingNetwork/publication)"
+[ "$code" = 200 ] || fail "The grid operator could not say what waits for it ($code): $(head -c 800 "$tmp/answer.json")"
+grep -q "\"awaiting\" *: *\[ *\"$change_set_id\"" "$tmp/answer.json" ||
+    fail "The grid operator's preview does not name the change set $change_set_id as awaiting it: $(head -c 800 "$tmp/answer.json")"
 
-code="$(curl -sS -m 30 -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' -d "$signatures" \
-             -o "$tmp/answer.json" -w '%{http_code}' "$network_url/history/changeSets/pending/$change_set_id/signatures" 2>/dev/null || echo 000)"
-{ [ "$code" = 201 ] || [ "$code" = 200 ]; } && [ "$(value status "$tmp/answer.json")" = committed ] ||
-    fail "The signature of the identity key did not commit the grid operator ($code): $(head -c 800 "$tmp/answer.json")"
+# It accepts: signs the change set with its identity key and sends the
+# signature to the hub, which commits it.
+code="$(go POST /api/v1/roamingNetwork/publication/accept)"
+[ "$code" = 200 ] || fail "The grid operator did not accept being added ($code): $(head -c 800 "$tmp/answer.json")"
+cp "$tmp/answer.json" "$tmp/accepted.json"
+grep -q '"isParty" *: *true' "$tmp/accepted.json" ||
+    fail "Accepting did not make the grid operator a party: $(head -c 800 "$tmp/accepted.json")"
 
 code="$(head_of_qa "$tmp/head-1.json")"
 [ "$code" = 200 ] || fail "The head of QA was not served ($code)."
 revision_party="$(number revision "$tmp/head-1-commit.json")"
+[ "$(number revision "$tmp/accepted.json")" = "$revision_party" ] ||
+    fail "Accepting said revision $(number revision "$tmp/accepted.json"), the head of QA is at $revision_party."
 grep -q '"DE\*SWJ"' "$tmp/head-1.json" || fail "The head of QA has no grid operator DE*SWJ: $(head -c 800 "$tmp/head-1.json")"
 grep -q '"GCP-1"' "$tmp/head-1.json" && fail "The head of QA has GCP-1 before the grid operator published it."
 
-echo "party             DE*SWJ added by the hub, change set $change_set_id signed by its identity key: QA at revision $revision_party"
+echo "party             DE*SWJ added by the hub, change set $change_set_id accepted by it, signed with its identity key: QA at revision $revision_party"
 
 #endregion
 

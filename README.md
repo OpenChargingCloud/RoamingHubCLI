@@ -479,6 +479,18 @@ roaming network `QA` and the hubs holding the keys of its operator,
 station each, their power and connectors from templates of their current, and
 the stations and the EVSEs grouped by their current.
 
+A grid operator does the same from a program of its own:
+[scripts/endToEnd-gridOperator.sh](scripts/endToEnd-gridOperator.sh) starts
+this hub and a [GridOperatorCLI](https://github.com/OpenChargingCloud/GridOperatorCLI)
+beside it, makes `QA`, adds the grid operator `DE*SWJ` with the public halves
+of its keys, which it accepts with `POST /api/v1/roamingNetwork/publication/accept`
+(`publish accept` at its prompt), signing the change set with its identity
+key, and lets it publish itself and a grid connection point. It is green when
+the head of `QA` has them, a second publication changes nothing and a changed
+point is one revision more. Both programs are built in Release first; the
+script says how, and `GRIDOPERATOR_DLL` points it at another build of the
+grid operator.
+
 
 ### Who may do what
 
@@ -548,6 +560,7 @@ server is held to none.
 | `libs/WWCP_Node/` | what the hub is before it is a hub: the log, the configuration file, name resolution and the time, the certificate store, the accounts and their roles, and the web server |
 | `libs/WWCP_OCPI/` | the protocol: OCPI 2.2.1 and 2.3.0 |
 | `libs/WWCP_POI/` | the points of interest: POI 3, its roaming networks, their change sets, history and sync |
+| `scripts/` | end to end runs of the hub with another program of the OpenChargingCloud: `endToEnd-gridOperator.sh`, a grid operator publishing itself to a roaming network |
 
 The command line is this program's vocabulary and nothing else - the switches
 at a start and the commands at the prompt. What a roaming hub *is*, and what
